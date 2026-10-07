@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import { formatIngredient } from '../lib/parse'
@@ -139,5 +139,48 @@ export const RecipePicker = ({
         {filtered.length === 0 && <li className="muted">Ei osumia.</li>}
       </ul>
     </Modal>
+  )
+}
+
+/**
+ * Painike, joka pyytää vahvistuksen toisella painalluksella. Selaimen confirm()-ikkunaa
+ * ei käytetä, koska kaikki ympäristöt eivät näytä sitä.
+ */
+export const ConfirmButton = ({
+  label,
+  confirmLabel,
+  onConfirm,
+  className,
+  skip = false,
+}: {
+  label: ReactNode
+  confirmLabel: string
+  onConfirm: () => void
+  className?: string
+  /** Kun tosi, toiminto tehdään heti ilman vahvistusta. */
+  skip?: boolean
+}) => {
+  const [isArmed, setArmed] = useState(false)
+
+  useEffect(() => {
+    if (!isArmed) return
+    const timer = setTimeout(() => setArmed(false), 4000)
+    return () => clearTimeout(timer)
+  }, [isArmed])
+
+  return (
+    <button
+      className={[className, isArmed ? 'is-armed' : ''].filter(Boolean).join(' ')}
+      onClick={() => {
+        if (skip || isArmed) {
+          setArmed(false)
+          onConfirm()
+        } else {
+          setArmed(true)
+        }
+      }}
+    >
+      {isArmed ? confirmLabel : label}
+    </button>
   )
 }

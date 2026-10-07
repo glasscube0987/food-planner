@@ -10,6 +10,7 @@ export const ShoppingView = ({ data, update }: { data: AppData; update: Update }
   const items = useMemo(() => buildShoppingList(data.plan, data.recipes, data.household), [data.plan, data.recipes, data.household])
   const [extra, setExtra] = useState('')
   const [copied, setCopied] = useState(false)
+  const [showText, setShowText] = useState(false)
   const checked = new Set(data.checked)
 
   const toggle = (key: string) =>
@@ -33,9 +34,14 @@ export const ShoppingView = ({ data, update }: { data: AppData; update: Update }
         // Peruttu jakaminen: kopioidaan leikepöydälle.
       }
     }
-    await navigator.clipboard?.writeText(text)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Leikepöytä ei ole käytettävissä: näytetään lista valittavana tekstinä.
+      setShowText(true)
+    }
   }
 
   return (
@@ -71,6 +77,17 @@ export const ShoppingView = ({ data, update }: { data: AppData; update: Update }
           Poista merkinnät
         </button>
       </div>
+
+      {showText && (
+        <textarea
+          className="copy-text"
+          readOnly
+          rows={Math.min(12, text.split('\n').length + 1)}
+          value={text}
+          onFocus={e => e.target.select()}
+          aria-label="Kauppalista tekstinä"
+        />
+      )}
 
       {items.length === 0 && data.extras.length === 0 && (
         <p className="muted">Lista on tyhjä. Valitse tai arvo ensin viikon ruoat Viikko-välilehdellä.</p>

@@ -22,7 +22,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --bg: #151816;
     --surface: #1e2320;
     --surface-2: #272d29;
@@ -43,6 +43,28 @@
     --kasvis-soft: #22331c;
     color-scheme: dark;
   }
+}
+
+:root[data-theme='dark'] {
+  --bg: #151816;
+  --surface: #1e2320;
+  --surface-2: #272d29;
+  --text: #e8ebe8;
+  --muted: #9aa39d;
+  --border: #353c37;
+  --accent: #6cc196;
+  --accent-text: #0d1f16;
+  --accent-soft: #23392d;
+  --danger: #f2867c;
+  --warning-bg: #3a3017;
+  --warning-text: #f3d98b;
+  --liha: #f0907b;
+  --liha-soft: #3d2520;
+  --kala: #8ab9ec;
+  --kala-soft: #1f2e40;
+  --kasvis: #9ad282;
+  --kasvis-soft: #22331c;
+  color-scheme: dark;
 }
 
 * {
@@ -168,6 +190,13 @@ button.primary {
 
 button.danger {
   color: var(--danger);
+}
+
+button.is-armed {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--surface);
+  font-weight: 600;
 }
 
 button.ghost {

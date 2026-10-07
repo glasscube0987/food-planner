@@ -4,6 +4,7 @@ import { DEFAULT_RULES, initialData, normalize } from '../lib/storage'
 import { CATEGORIES, CATEGORY_LABEL, DAYS, DAY_LABEL } from '../lib/types'
 import type { AppData, Rules } from '../lib/types'
 import type { Update } from '../state'
+import { ConfirmButton } from './common'
 
 const splitTags = (text: string) => text.split(',').map(t => t.trim()).filter(Boolean)
 
@@ -162,14 +163,12 @@ export const RulesView = ({ data, update, replace }: { data: AppData; update: Up
         <div className="actions">
           <button onClick={exportData}>⬇️ Vie tiedostoon</button>
           <button onClick={() => fileInput.current?.click()}>⬆️ Tuo tiedostosta</button>
-          <button
+          <ConfirmButton
             className="danger"
-            onClick={() => {
-              if (confirm('Palautetaanko sovellus alkutilaan? Omat reseptit ja suunnitelmat poistuvat.')) replace(initialData())
-            }}
-          >
-            Palauta alkutilaan
-          </button>
+            label="Palauta alkutilaan"
+            confirmLabel="Vahvista: omat reseptit ja suunnitelmat poistuvat"
+            onConfirm={() => replace(initialData())}
+          />
         </div>
         <input
           ref={fileInput}

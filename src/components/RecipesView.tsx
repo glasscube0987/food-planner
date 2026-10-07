@@ -6,7 +6,7 @@ import { CATEGORIES, CATEGORY_LABEL } from '../lib/types'
 import type { AppData, Category, Recipe } from '../lib/types'
 import { newId } from '../state'
 import type { Update } from '../state'
-import { Modal, RecipeDetails, RecipeMeta, useRecipeFilter } from './common'
+import { ConfirmButton, Modal, RecipeDetails, RecipeMeta, useRecipeFilter } from './common'
 
 export const RecipesView = ({ data, update }: { data: AppData; update: Update }) => {
   const { filtered, controls } = useRecipeFilter(data.recipes)
@@ -27,7 +27,6 @@ export const RecipesView = ({ data, update }: { data: AppData; update: Update })
   }
 
   const remove = (recipe: Recipe) => {
-    if (!confirm(`Poistetaanko "${recipe.name}" ruokapoolista?`)) return
     update(d => ({
       ...d,
       recipes: d.recipes.filter(r => r.id !== recipe.id),
@@ -67,9 +66,7 @@ export const RecipesView = ({ data, update }: { data: AppData; update: Update })
                 <RecipeDetails recipe={r} />
                 <div className="actions">
                   <button onClick={() => setEditing(r)}>Muokkaa</button>
-                  <button className="danger" onClick={() => remove(r)}>
-                    Poista
-                  </button>
+                  <ConfirmButton className="danger" label="Poista" confirmLabel="Vahvista poisto" onConfirm={() => remove(r)} />
                 </div>
               </>
             )}

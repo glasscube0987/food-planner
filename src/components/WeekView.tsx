@@ -5,7 +5,7 @@ import { addWeeks, emptyPlan } from '../lib/storage'
 import { CATEGORIES, DAY_LABEL } from '../lib/types'
 import type { AppData, Day, PlanSlot, Recipe } from '../lib/types'
 import type { Update } from '../state'
-import { Modal, RecipeDetails, RecipeMeta, RecipePicker } from './common'
+import { ConfirmButton, Modal, RecipeDetails, RecipeMeta, RecipePicker } from './common'
 
 const formatWeek = (weekStart: string) => {
   const [y, m, d] = weekStart.split('-').map(Number)
@@ -58,7 +58,6 @@ export const WeekView = ({ data, update, onShopping }: { data: AppData; update: 
   }
 
   const startNextWeek = () => {
-    if (planned > 0 && !confirm('Siirretäänkö tämä viikko historiaan ja aloitetaan seuraava viikko tyhjänä?')) return
     update(d => ({
       ...d,
       history: planned > 0 ? [d.plan, ...d.history].slice(0, 12) : d.history,
@@ -87,7 +86,12 @@ export const WeekView = ({ data, update, onShopping }: { data: AppData; update: 
         <button onClick={onShopping} disabled={planned === 0}>
           🛒 Kauppalista
         </button>
-        <button onClick={startNextWeek}>➡️ Seuraava viikko</button>
+        <ConfirmButton
+          label="➡️ Seuraava viikko"
+          confirmLabel="Paina uudelleen: tämä viikko historiaan"
+          skip={planned === 0}
+          onConfirm={startNextWeek}
+        />
       </div>
       <p className="muted small">Arvonta noudattaa Säännöt-välilehden asetuksia. Lukitut 🔒 päivät pysyvät ennallaan.</p>
 
