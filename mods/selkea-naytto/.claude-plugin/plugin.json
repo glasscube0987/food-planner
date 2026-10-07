@@ -1,0 +1,6 @@
+{
+  "name": "selkea-naytto",
+  "version": "0.1.0",
+  "description": "Siivoaa näytön työn aikana: tiiviit työkalurivit, piilotetut tulosteet ja yksi tilarivi olennaisesta",
+  "types": "./types/index.d.ts"
+}

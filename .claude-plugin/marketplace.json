@@ -1,0 +1,12 @@
+{
+  "name": "food-planner",
+  "owner": { "name": "glasscube0987" },
+  "metadata": { "description": "Food-plannerin Claude Code -modit" },
+  "plugins": [
+    {
+      "name": "selkea-naytto",
+      "source": "./mods/selkea-naytto",
+      "description": "Siivoaa näytön työn aikana: tiiviit työkalurivit, piilotetut tulosteet ja yksi tilarivi olennaisesta"
+    }
+  ]
+}

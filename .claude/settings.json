@@ -1,0 +1,10 @@
+{
+  "extraKnownMarketplaces": {
+    "food-planner": {
+      "source": { "source": "github", "repo": "glasscube0987/food-planner" }
+    }
+  },
+  "enabledPlugins": {
+    "selkea-naytto@food-planner": true
+  }
+}
