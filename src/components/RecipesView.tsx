@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+
+import { ClaudeImport } from './ClaudeImport'
 
 import { randomMeals, searchMeals } from '../lib/mealdb'
 import { formatIngredient, parseIngredientLines } from '../lib/parse'
@@ -11,8 +13,10 @@ import { ConfirmButton, Modal, RecipeDetails, RecipeMeta, useRecipeFilter } from
 export const RecipesView = ({ data, update }: { data: AppData; update: Update }) => {
   const { filtered, controls } = useRecipeFilter(data.recipes)
   const [open, setOpen] = useState<string | null>(null)
-  const [editing, setEditing] = useState<Recipe | 'new' | null>(null)
+  const [editing, setEditing] = useState<{ recipe?: Recipe; title: string } | null>(null)
   const [importing, setImporting] = useState(false)
+  const [asking, setAsking] = useState<'parse' | 'suggest' | null>(null)
+  const sample = useSample()
 
   const counts = Object.fromEntries(CATEGORIES.map(c => [c, data.recipes.filter(r => r.category === c).length]))
 
@@ -46,10 +50,12 @@ export const RecipesView = ({ data, update }: { data: AppData; update: Update })
       </div>
 
       <div className="actions">
-        <button className="primary" onClick={() => setEditing('new')}>
+        <button className="primary" onClick={() => setEditing({ title: 'Uusi oma resepti' })}>
           + Oma resepti
         </button>
-        <button onClick={() => setImporting(true)}>🌐 Hae avoimista lähteistä</button>
+        {sample && <button onClick={() => setAsking('parse')}>📋 Liitä resepti netistä</button>}
+        {sample && <button onClick={() => setAsking('suggest')}>✨ Kysy Claudelta</button>}
+        {!window.claude && <button onClick={() => setImporting(true)}>🌐 Hae TheMealDB:stä</button>}
       </div>
 
       {controls}
@@ -65,7 +71,7 @@ export const RecipesView = ({ data, update }: { data: AppData; update: Update })
               <>
                 <RecipeDetails recipe={r} />
                 <div className="actions">
-                  <button onClick={() => setEditing(r)}>Muokkaa</button>
+                  <button onClick={() => setEditing({ recipe: r, title: 'Muokkaa reseptiä' })}>Muokkaa</button>
                   <ConfirmButton className="danger" label="Poista" confirmLabel="Vahvista poisto" onConfirm={() => remove(r)} />
                 </div>
               </>
@@ -77,9 +83,22 @@ export const RecipesView = ({ data, update }: { data: AppData; update: Update })
 
       {editing && (
         <RecipeForm
-          initial={editing === 'new' ? undefined : editing}
+          initial={editing.recipe}
+          title={editing.title}
           onCancel={() => setEditing(null)}
           onSave={saveRecipe}
+        />
+      )}
+
+      {asking && sample && (
+        <ClaudeImport
+          mode={asking}
+          sample={sample}
+          onClose={() => setAsking(null)}
+          onRecipe={recipe => {
+            setAsking(null)
+            setEditing({ recipe, title: 'Tarkista ja tallenna resepti' })
+          }}
         />
       )}
 
@@ -94,12 +113,27 @@ export const RecipesView = ({ data, update }: { data: AppData; update: Update })
   )
 }
 
+/** Clauden kysymisominaisuus, kun sovellus on avattu claude.ai-artifaktina; muuten null. */
+const useSample = () => {
+  const [sample, setSample] = useState<ClaudeSample | null>(null)
+  useEffect(() => {
+    let isActive = true
+    void window.claude?.use('sample').then(s => isActive && setSample(() => s))
+    return () => {
+      isActive = false
+    }
+  }, [])
+  return sample
+}
+
 const RecipeForm = ({
   initial,
+  title,
   onSave,
   onCancel,
 }: {
   initial?: Recipe
+  title: string
   onSave: (recipe: Recipe) => void
   onCancel: () => void
 }) => {
@@ -108,6 +142,7 @@ const RecipeForm = ({
   const [minutes, setMinutes] = useState(initial?.minutes?.toString() ?? '')
   const [servings, setServings] = useState(initial?.servings.toString() ?? '4')
   const [tags, setTags] = useState(initial?.tags.join(', ') ?? '')
+  const [lastsTwoDays, setLastsTwoDays] = useState(initial?.lastsTwoDays ?? false)
   const [ingredients, setIngredients] = useState(initial?.ingredients.map(formatIngredient).join('\n') ?? '')
   const [instructions, setInstructions] = useState(initial?.instructions ?? '')
 
@@ -121,6 +156,7 @@ const RecipeForm = ({
       minutes: minutes.trim() && Number.isFinite(parsedMinutes) ? parsedMinutes : undefined,
       servings: Math.max(1, Number(servings) || 4),
       tags: tags.split(',').map(t => t.trim()).filter(Boolean),
+      lastsTwoDays,
       ingredients: parseIngredientLines(ingredients),
       instructions: instructions.trim(),
       source: initial?.source ?? { name: 'Oma resepti' },
@@ -129,7 +165,7 @@ const RecipeForm = ({
   }
 
   return (
-    <Modal title={initial ? 'Muokkaa reseptiä' : 'Uusi oma resepti'} onClose={onCancel}>
+    <Modal title={title} onClose={onCancel}>
       <form className="form" onSubmit={submit}>
         <label>
           Nimi
@@ -155,6 +191,10 @@ const RecipeForm = ({
             <input inputMode="numeric" value={servings} onChange={e => setServings(e.target.value)} />
           </label>
         </div>
+        <label className="inline">
+          <input type="checkbox" checked={lastsTwoDays} onChange={e => setLastsTwoDays(e.target.checked)} />
+          Riittää kahdeksi päiväksi (tuplasatsi, esim. keitot ja laatikot)
+        </label>
         <label>
           Tunnisteet (pilkuilla eroteltuna)
           <input value={tags} onChange={e => setTags(e.target.value)} placeholder="nopea, arki, lasten suosikki" />

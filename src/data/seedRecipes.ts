@@ -6,6 +6,13 @@ import type { Category, Recipe } from '../lib/types'
  * tekstit kirjoitettu tätä sovellusta varten. Ainesten nimet on kirjoitettu
  * perusmuodossa, jotta kauppalista yhdistää samat ainekset.
  */
+/** Ruoat, jotka on helppo tehdä tuplasatsina ja jotka maistuvat myös seuraavana päivänä. */
+const BATCH = new Set([
+  'jauhelihakastike', 'lihapullat', 'makaronilaatikko', 'kaalilaatikko', 'karjalanpaisti', 'broilerikastike',
+  'chili', 'lasagne', 'lihakeitto', 'kanakeitto', 'lohikeitto', 'kalakeitto', 'kasvissosekeitto',
+  'kasvislasagne', 'kikhernecurry', 'linssikeitto', 'kasvispihvit', 'hernekeitto',
+])
+
 const recipe = (
   id: string,
   name: string,
@@ -16,6 +23,7 @@ const recipe = (
   instructions: string,
   servings = 4,
 ): Recipe => ({
+  ...(BATCH.has(id) ? { lastsTwoDays: true } : {}),
   id: `perus-${id}`,
   name,
   category,

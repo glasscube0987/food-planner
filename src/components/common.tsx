@@ -13,6 +13,7 @@ export const RecipeMeta = ({ recipe }: { recipe: Recipe }) => (
   <span className="meta">
     <CategoryBadge category={recipe.category} />
     {recipe.minutes !== undefined && <span>⏱ {recipe.minutes} min</span>}
+    {recipe.lastsTwoDays && <span title="Riittää kahdeksi päiväksi">🥡 2 pv</span>}
     {recipe.isOwn && <span>⭐ oma</span>}
   </span>
 )

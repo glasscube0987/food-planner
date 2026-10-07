@@ -27,6 +27,7 @@ export const DEFAULT_RULES: Rules = {
   days: [...DAYS],
   counts: { liha: 3, kala: 2, kasvis: 2 },
   weekdayMaxMinutes: null,
+  leftoverDays: 2,
   avoidSameCategoryInRow: true,
   noRepeatWeeks: 2,
   excludeTags: [],

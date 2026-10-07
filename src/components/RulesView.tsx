@@ -8,7 +8,17 @@ import { ConfirmButton } from './common'
 
 const splitTags = (text: string) => text.split(',').map(t => t.trim()).filter(Boolean)
 
-export const RulesView = ({ data, update, replace }: { data: AppData; update: Update; replace: (d: AppData) => void }) => {
+export const RulesView = ({
+  data,
+  update,
+  replace,
+  isShared,
+}: {
+  data: AppData
+  update: Update
+  replace: (d: AppData) => void
+  isShared: boolean
+}) => {
   const rules = data.rules
   const setRules = (patch: Partial<Rules>) => update(d => ({ ...d, rules: { ...d.rules, ...patch } }))
   const fileInput = useRef<HTMLInputElement>(null)
@@ -17,12 +27,28 @@ export const RulesView = ({ data, update, replace }: { data: AppData; update: Up
   const total = CATEGORIES.reduce((sum, c) => sum + (rules.counts[c] ?? 0), 0)
   const allTags = [...new Set(data.recipes.flatMap(r => r.tags))].sort((a, b) => a.localeCompare(b, 'fi'))
 
-  const exportData = () => {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  const exportData = async () => {
+    const json = JSON.stringify(data, null, 2)
+    const filename = `ruokalista-${new Date().toISOString().slice(0, 10)}.json`
+    if (window.claude) {
+      // Artifaktina sivu ei voi ladata tiedostoja itse; tallennus kysytään käyttäjältä.
+      const downloads = await window.claude.use('downloads')
+      if (!downloads) {
+        setMessage('Tiedostoon vienti ei ole käytettävissä tässä näkymässä.')
+        return
+      }
+      try {
+        await downloads.save({ filename, data: json })
+      } catch {
+        setMessage('Tiedostoa ei tallennettu.')
+      }
+      return
+    }
+    const blob = new Blob([json], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `ruokalista-${new Date().toISOString().slice(0, 10)}.json`
+    a.download = filename
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -106,6 +132,26 @@ export const RulesView = ({ data, update, replace }: { data: AppData; update: Up
       </fieldset>
 
       <fieldset className="card">
+        <legend>Tähdepäivät</legend>
+        <div className="count-row">
+          <span>Tähdepäiviä viikossa</span>
+          <div className="stepper">
+            <button aria-label="Vähemmän tähdepäiviä" onClick={() => setRules({ leftoverDays: Math.max(0, rules.leftoverDays - 1) })}>
+              −
+            </button>
+            <span className="stepper-value">{rules.leftoverDays}</span>
+            <button aria-label="Enemmän tähdepäiviä" onClick={() => setRules({ leftoverDays: Math.min(3, rules.leftoverDays + 1) })}>
+              +
+            </button>
+          </div>
+        </div>
+        <p className="muted small">
+          Tähdepäivänä syödään edellisen päivän ruokaa, joten sinä päivänä ei kokata. Edelliselle päivälle arvotaan ruoka, joka
+          riittää kahdeksi päiväksi, ja kauppalista laskee sille tuplamäärät. Esimerkiksi 7 päivää ja 2 tähdepäivää = 5 kokkauskertaa.
+        </p>
+      </fieldset>
+
+      <fieldset className="card">
         <legend>Muut säännöt</legend>
         <label>
           Arkipäivien (ma–pe) enimmäisvalmistusaika
@@ -158,10 +204,12 @@ export const RulesView = ({ data, update, replace }: { data: AppData; update: Up
       <fieldset className="card">
         <legend>Tiedot</legend>
         <p className="muted small">
-          Tiedot tallentuvat tämän selaimen muistiin. Vie ne tiedostoon varmuuskopioksi tai siirtääksesi ne toiselle laitteelle.
+          {isShared
+            ? 'Tiedot tallentuvat yhteiseen listaan, jonka kaikki sivun muokkaajat näkevät. Vie ne tiedostoon varmuuskopioksi. Tiedostosta tuonti ja alkutilaan palautus muuttavat listan kaikilta.'
+            : 'Tiedot tallentuvat tämän selaimen muistiin. Vie ne tiedostoon varmuuskopioksi tai siirtääksesi ne toiselle laitteelle.'}
         </p>
         <div className="actions">
-          <button onClick={exportData}>⬇️ Vie tiedostoon</button>
+          <button onClick={() => void exportData()}>⬇️ Vie tiedostoon</button>
           <button onClick={() => fileInput.current?.click()}>⬆️ Tuo tiedostosta</button>
           <ConfirmButton
             className="danger"

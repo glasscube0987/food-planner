@@ -1,3 +1,4 @@
+import { resolveSlots } from './types'
 import type { Ingredient, Recipe, WeekPlan } from './types'
 
 export type ShoppingItem = {
@@ -64,8 +65,9 @@ export const buildShoppingList = (
     { name: string; totals: Map<string, number>; notes: string[]; usedIn: Set<string> }
   >()
 
-  for (const slot of plan.slots) {
-    const recipe = slot.recipeId ? byId.get(slot.recipeId) : undefined
+  // Jokainen syöntipäivä lasketaan, joten tähdepäivä kasvattaa kokkauspäivän satsin tuplaksi.
+  for (const slot of resolveSlots(plan.slots)) {
+    const recipe = slot.eatenRecipeId ? byId.get(slot.eatenRecipeId) : undefined
     if (!recipe) continue
     const scale = household / Math.max(1, recipe.servings)
 

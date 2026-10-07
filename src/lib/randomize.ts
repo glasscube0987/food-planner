@@ -1,4 +1,4 @@
-import { CATEGORIES, DAY_LABEL } from './types'
+import { CATEGORIES, DAYS, DAY_LABEL, resolveSlots } from './types'
 import type { Category, Day, PlanSlot, Recipe, Rules, WeekPlan } from './types'
 
 export type Random = () => number
@@ -23,7 +23,7 @@ const shuffle = <T>(items: readonly T[], random: Random): T[] => {
 const hasTag = (recipe: Recipe, tag: string) =>
   recipe.tags.some(t => t.toLowerCase() === tag.toLowerCase())
 
-/** Ruoat, jotka sääntöjen tunnisteet ja aikaraja sallivat annetulle päivälle. */
+/** Sallivatko sääntöjen tunnisteet ja aikaraja ruoan annetulle kokkauspäivälle. */
 export const allowedFor = (recipe: Recipe, day: Day, rules: Rules): boolean => {
   if (rules.excludeTags.some(tag => hasTag(recipe, tag))) return false
   if (!rules.requireTags.every(tag => hasTag(recipe, tag))) return false
@@ -38,83 +38,109 @@ export const allowedFor = (recipe: Recipe, day: Day, rules: Rules): boolean => {
   return true
 }
 
-/** Kunkin tyypin tarve arvottaville päiville, kun lukitut päivät on jo huomioitu. */
-const categoryNeeds = (
-  rules: Rules,
-  locked: PlanSlot[],
-  byId: Map<string, Recipe>,
-  open: number,
-  warnings: string[],
-  random: Random,
-): (Category | null)[] => {
-  const needs: (Category | null)[] = []
+/** Arvottava kokonaisuus: yksi kokkauspäivä ja sitä seuraavat tähdepäivät. */
+type Unit = { days: Day[]; category: Category | null }
 
-  for (const category of CATEGORIES) {
-    const wanted = rules.counts[category]
-    if (wanted === null) continue
-    const already = locked.filter(s => s.recipeId && byId.get(s.recipeId)?.category === category).length
-    for (let i = already; i < wanted; i++) needs.push(category)
+const isNextDay = (a: Day, b: Day) => DAYS.indexOf(b) === DAYS.indexOf(a) + 1
+
+/** Valitsee arvottavista päivistä tähdepäivät: päivä, jota edeltää arvottava kokkauspäivä. */
+const buildUnits = (open: Day[], leftoverDays: number, random: Random, warnings: string[]): Unit[] => {
+  const candidates = shuffle(
+    open.filter((day, i) => i > 0 && isNextDay(open[i - 1]!, day)),
+    random,
+  )
+  const leftovers = new Set<Day>()
+  for (const day of candidates) {
+    if (leftovers.size >= leftoverDays) break
+    const previous = DAYS[DAYS.indexOf(day) - 1]!
+    const next = DAYS[DAYS.indexOf(day) + 1]
+    // Yksi tähdepäivä per kokkaus: ei ketjuja eikä tähdepäivää tähdepäivän jälkeen.
+    if (leftovers.has(previous) || (next && leftovers.has(next))) continue
+    leftovers.add(day)
   }
-
-  if (needs.length > open) {
+  if (leftovers.size < leftoverDays) {
     warnings.push(
-      `Säännöt pyytävät ${needs.length} ruokaa, mutta arvottavia päiviä on vain ${open}. Osa määristä jää täyttymättä.`,
+      `Tähdepäiviä saatiin ${leftovers.size}/${leftoverDays}: tähdepäivä tarvitsee edelliseksi päiväksi arvottavan kokkauspäivän.`,
     )
-    needs.length = open
   }
 
-  // Loput päivät saavat tyypin, jolle ei ole asetettu määrää, jotta asetetut
-  // määrät pitävät täsmälleen. Jos kaikille on asetettu määrä, mikä tahansa käy.
-  const free = CATEGORIES.filter(c => rules.counts[c] === null)
-  while (needs.length < open) {
-    needs.push(free.length > 0 ? free[Math.floor(random() * free.length)]! : null)
+  const units: Unit[] = []
+  for (const day of open) {
+    if (leftovers.has(day)) units[units.length - 1]!.days.push(day)
+    else units.push({ days: [day], category: null })
   }
-
-  return needs
+  return units
 }
 
-/** Järjestää tyypit päiville niin, ettei sama tyyppi toistu peräkkäin, jos mahdollista. */
-const arrange = (
-  needs: (Category | null)[],
-  days: Day[],
+/**
+ * Antaa jokaiselle kokonaisuudelle ruokatyypin. Määrät lasketaan syöntipäivinä,
+ * joten tuplasatsi kattaa kaksi päivää samaa tyyppiä. Paras monesta satunnaisesta
+ * yrityksestä valitaan: ensin määrät täsmälleen, sitten vähiten samaa tyyppiä peräkkäin.
+ */
+const assignCategories = (
+  units: Unit[],
+  needs: Record<Category, number>,
+  free: Category[],
   fixed: Map<Day, Category | undefined>,
   rules: Rules,
   random: Random,
-): (Category | null)[] => {
-  const order = rules.days
-  const score = (assignment: (Category | null)[]) => {
-    const byDay = new Map<Day, Category | null | undefined>()
-    days.forEach((d, i) => byDay.set(d, assignment[i]))
+): { units: Unit[]; missed: number } => {
+  const score = (assigned: Unit[]) => {
+    const byDay = new Map<Day, Category | null | undefined>(fixed)
+    for (const u of assigned) for (const d of u.days) byDay.set(d, u.category)
     let clashes = 0
-    for (let i = 1; i < order.length; i++) {
-      const a = byDay.has(order[i - 1]!) ? byDay.get(order[i - 1]!) : fixed.get(order[i - 1]!)
-      const b = byDay.has(order[i]!) ? byDay.get(order[i]!) : fixed.get(order[i]!)
-      if (a && b && a === b) clashes++
+    for (let i = 1; i < rules.days.length; i++) {
+      const a = byDay.get(rules.days[i - 1]!)
+      const b = byDay.get(rules.days[i]!)
+      const sameUnit = assigned.some(u => u.days.includes(rules.days[i - 1]!) && u.days.includes(rules.days[i]!))
+      if (a && b && a === b && !sameUnit && isNextDay(rules.days[i - 1]!, rules.days[i]!)) clashes++
     }
     return clashes
   }
 
-  let best = shuffle(needs, random)
-  if (!rules.avoidSameCategoryInRow) return best
-  let bestScore = score(best)
-  for (let attempt = 0; attempt < 200 && bestScore > 0; attempt++) {
-    const candidate = shuffle(needs, random)
-    const s = score(candidate)
-    if (s < bestScore) {
-      best = candidate
-      bestScore = s
+  let best: { units: Unit[]; missed: number; clashes: number } | null = null
+  for (let attempt = 0; attempt < 300; attempt++) {
+    const left = { ...needs }
+    let missed = 0
+    const order = shuffle(units.map((_, i) => i), random)
+    const result = units.map(u => ({ ...u }))
+    // Isommat kokonaisuudet ensin, jotta tuplasatsille löytyy tyyppi, jota on jäljellä tarpeeksi.
+    order.sort((a, b) => units[b]!.days.length - units[a]!.days.length)
+    for (const i of order) {
+      const size = units[i]!.days.length
+      const fits = CATEGORIES.filter(c => left[c] >= size)
+      const some = CATEGORIES.filter(c => left[c] > 0)
+      let category: Category | null
+      if (fits.length > 0) category = fits[Math.floor(random() * fits.length)]!
+      else if (free.length > 0) category = free[Math.floor(random() * free.length)]!
+      else if (some.length > 0) category = some[Math.floor(random() * some.length)]!
+      else category = null
+      // Tyyppi, jolle on asetettu määrä, ei saa ylittyä: ylitys lasketaan virheeksi.
+      if (category && !free.includes(category)) {
+        const used = Math.min(size, left[category])
+        missed += size - used
+        left[category] -= used
+      }
+      result[i]!.category = category
     }
+    missed += CATEGORIES.reduce((sum, c) => sum + left[c], 0)
+    const clashes = rules.avoidSameCategoryInRow ? score(result) : 0
+    if (!best || missed < best.missed || (missed === best.missed && clashes < best.clashes)) {
+      best = { units: result, missed, clashes }
+    }
+    if (best.missed === 0 && best.clashes === 0) break
   }
-  return best
+  return { units: best!.units, missed: best!.missed }
 }
 
 /**
  * Arpoo ruoat lukitsemattomille päiville sääntöjen mukaan.
  *
- * Järjestys: ensin päätetään kunkin päivän ruokatyyppi (määrät ja peräkkäisyys),
- * sitten valitaan tyypin sisältä ruoka, joka sopii päivälle eikä ole jo viikolla
- * tai edellisillä viikoilla. Jos sopivaa ei löydy, sääntöjä löysätään vaiheittain
- * ja siitä kerrotaan varoituksella.
+ * Järjestys: valitaan tähdepäivät, päätetään kunkin kokkauksen ruokatyyppi
+ * (määrät ja peräkkäisyys), sitten valitaan tyypin sisältä ruoka, joka sopii
+ * kokkauspäivälle eikä ole jo viikolla tai edellisillä viikoilla. Tuplasatsiin
+ * valitaan ruoka, joka riittää kahdeksi päiväksi. Jos sopivaa ei löydy, sääntöjä
+ * löysätään vaiheittain ja siitä kerrotaan varoituksella.
  */
 export const randomizeWeek = (
   plan: WeekPlan,
@@ -128,44 +154,87 @@ export const randomizeWeek = (
   const slots = rules.days.map(
     day => plan.slots.find(s => s.day === day) ?? { day, recipeId: null, isLocked: false },
   )
-  const locked = slots.filter(s => s.isLocked && s.recipeId && byId.has(s.recipeId))
-  const openSlots = slots.filter(s => !locked.includes(s))
+
+  // Lukitut päivät ja niiden tähdepäivät pysyvät. Muut tyhjennetään arvontaa varten.
+  const resolved = resolveSlots(plan.slots)
+  const isKept = (slot: PlanSlot) => {
+    const r = resolved.find(x => x.day === slot.day)
+    if (!r?.eatenRecipeId || !byId.has(r.eatenRecipeId)) return false
+    const cook = plan.slots.find(s => s.day === r.cookedOn)
+    return Boolean(cook?.isLocked)
+  }
+  const kept = slots.filter(isKept)
+  const open = slots.filter(s => !kept.includes(s)).map(s => s.day)
+
+  const fixed = new Map<Day, Category | undefined>(
+    kept.map(s => [s.day, byId.get(resolved.find(x => x.day === s.day)!.eatenRecipeId!)?.category]),
+  )
+
+  const needs = Object.fromEntries(
+    CATEGORIES.map(c => {
+      const wanted = rules.counts[c]
+      const already = [...fixed.values()].filter(v => v === c).length
+      return [c, wanted === null ? 0 : Math.max(0, wanted - already)]
+    }),
+  ) as Record<Category, number>
+  const totalNeeds = CATEGORIES.reduce((sum, c) => sum + needs[c], 0)
+  if (totalNeeds > open.length) {
+    warnings.push(
+      `Säännöt pyytävät ${totalNeeds} ruokapäivää, mutta arvottavia päiviä on vain ${open.length}. Osa määristä jää täyttymättä.`,
+    )
+  }
+  const free = CATEGORIES.filter(c => rules.counts[c] === null)
+  const keptLeftovers = kept.filter(s => resolved.find(x => x.day === s.day)?.isLeftover).length
+  const units = buildUnits(open, Math.max(0, rules.leftoverDays - keptLeftovers), random, warnings)
+  const { units: assigned } = assignCategories(units, needs, free, fixed, rules, random)
 
   const recent = new Set(
-    history.slice(0, rules.noRepeatWeeks).flatMap(w => w.slots.map(s => s.recipeId).filter(Boolean) as string[]),
+    history
+      .slice(0, rules.noRepeatWeeks)
+      .flatMap(w => w.slots.map(s => s.recipeId).filter(Boolean) as string[]),
   )
-  const used = new Set(locked.map(s => s.recipeId!))
+  const used = new Set(kept.map(s => resolved.find(x => x.day === s.day)!.eatenRecipeId!))
 
-  const needs = categoryNeeds(rules, locked, byId, openSlots.length, warnings, random)
-  const fixed = new Map(locked.map(s => [s.day, byId.get(s.recipeId!)?.category]))
-  const arranged = arrange(needs, openSlots.map(s => s.day), fixed, rules, random)
-
-  const picked = new Map<Day, string | null>()
-  openSlots.forEach((slot, i) => {
-    const category = arranged[i] ?? null
+  const picked = new Map<Day, PlanSlot>()
+  for (const unit of assigned) {
+    const [cookDay, ...leftoverDays] = unit.days as [Day, ...Day[]]
+    const isBatch = leftoverDays.length > 0
+    const inCategory = (r: Recipe) => unit.category === null || r.category === unit.category
     const tiers: { label: string | null; ok: (r: Recipe) => boolean }[] = [
-      { label: null, ok: r => allowedFor(r, slot.day, rules) && !recent.has(r.id) },
-      { label: 'aiemmilta viikoilta', ok: r => allowedFor(r, slot.day, rules) },
+      { label: null, ok: r => allowedFor(r, cookDay, rules) && !recent.has(r.id) && (!isBatch || r.lastsTwoDays === true) },
+      ...(isBatch
+        ? [{ label: 'ruoka, jota ei ole merkitty riittämään kahdeksi päiväksi', ok: (r: Recipe) => allowedFor(r, cookDay, rules) && !recent.has(r.id) }]
+        : []),
+      { label: 'aiemmilta viikoilta', ok: r => allowedFor(r, cookDay, rules) },
       { label: 'sääntöjen ulkopuolelta', ok: () => true },
     ]
+
+    let choice: Recipe | undefined
     for (const tier of tiers) {
-      const pool = recipes.filter(r => (category === null || r.category === category) && !used.has(r.id) && tier.ok(r))
+      const pool = recipes.filter(r => inCategory(r) && !used.has(r.id) && tier.ok(r))
       if (pool.length === 0) continue
-      const choice = pool[Math.floor(random() * pool.length)]!
-      used.add(choice.id)
-      picked.set(slot.day, choice.id)
+      choice = pool[Math.floor(random() * pool.length)]!
       if (tier.label) {
-        const what = category ? `${category}ruokia` : 'ruokia'
-        warnings.push(`${DAY_LABEL[slot.day]}: sopivia ${what} ei riittänyt, joten valittiin ${tier.label}.`)
+        const what = unit.category ? `${unit.category}ruokia` : 'ruokia'
+        warnings.push(`${DAY_LABEL[cookDay]}: sopivia ${what} ei riittänyt, joten valittiin ${tier.label}.`)
       }
-      return
+      break
     }
-    picked.set(slot.day, null)
-    warnings.push(`${DAY_LABEL[slot.day]}: ruokapoolissa ei ole tarpeeksi ${category ? `${category}ruokia` : 'ruokia'}.`)
-  })
+    if (!choice) {
+      warnings.push(
+        `${DAY_LABEL[cookDay]}: ruokapoolissa ei ole tarpeeksi ${unit.category ? `${unit.category}ruokia` : 'ruokia'}.`,
+      )
+    } else {
+      used.add(choice.id)
+    }
+    picked.set(cookDay, { day: cookDay, recipeId: choice?.id ?? null, isLocked: false, isLeftover: false })
+    for (const day of leftoverDays) {
+      picked.set(day, { day, recipeId: null, isLocked: false, isLeftover: choice !== undefined })
+    }
+  }
 
   return {
-    slots: slots.map(s => (picked.has(s.day) ? { ...s, recipeId: picked.get(s.day)! } : s)),
+    slots: slots.map(s => picked.get(s.day) ?? s),
     warnings,
   }
 }

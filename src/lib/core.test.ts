@@ -5,7 +5,8 @@ import { categorize, mealToRecipe } from './mealdb'
 import { parseIngredientLine } from './parse'
 import { randomizeWeek } from './randomize'
 import { buildShoppingList } from './shopping'
-import { DEFAULT_RULES, addWeeks, emptyPlan, mondayOf, normalize } from './storage'
+import { DEFAULT_RULES as DEFAULTS, addWeeks, emptyPlan, mondayOf, normalize } from './storage'
+import { resolveSlots } from './types'
 import type { Recipe, Rules, WeekPlan } from './types'
 
 /** Toistettava satunnaislukugeneraattori testeihin. */
@@ -41,6 +42,8 @@ describe('parseIngredientLine', () => {
 
 describe('randomizeWeek', () => {
   const plan = emptyPlan('2026-10-05')
+  // Perussäännöt ilman tähdepäiviä; tähdepäivät testataan omassa ryhmässään.
+  const DEFAULT_RULES: Rules = { ...DEFAULTS, leftoverDays: 0 }
 
   it('noudattaa liha/kala/kasvis-määriä täsmälleen', () => {
     for (let seed = 1; seed < 30; seed++) {
@@ -110,6 +113,82 @@ describe('randomizeWeek', () => {
     const rules: Rules = { ...DEFAULT_RULES, days: ['ma', 'ke', 'pe'], counts: { liha: 1, kala: 1, kasvis: 1 } }
     const { slots } = randomizeWeek(plan, SEED_RECIPES, rules, [], seeded(5))
     expect(slots.map(s => s.day)).toEqual(['ma', 'ke', 'pe'])
+  })
+})
+
+describe('tähdepäivät', () => {
+  const plan = emptyPlan('2026-10-05')
+  const byId = new Map(SEED_RECIPES.map(r => [r.id, r]))
+  const eaten = (slots: WeekPlan['slots']) => resolveSlots(slots).map(s => byId.get(s.eatenRecipeId!)!)
+
+  it('tekee pyydetyn määrän tähdepäiviä tuplasatsiruoista', () => {
+    for (let seed = 1; seed < 40; seed++) {
+      const { slots, warnings } = randomizeWeek(plan, SEED_RECIPES, DEFAULTS, [], seeded(seed))
+      expect(warnings).toEqual([])
+      const leftovers = slots.filter(s => s.isLeftover)
+      expect(leftovers).toHaveLength(2)
+      expect(slots.filter(s => s.recipeId)).toHaveLength(5)
+      for (const s of resolveSlots(slots)) {
+        if (s.isLeftover) expect(byId.get(s.eatenRecipeId!)!.lastsTwoDays).toBe(true)
+      }
+      // Määrät lasketaan syöntipäivinä.
+      const counts = { liha: 0, kala: 0, kasvis: 0 }
+      for (const r of eaten(slots)) counts[r.category]++
+      expect(counts).toEqual({ liha: 3, kala: 2, kasvis: 2 })
+    }
+  })
+
+  it('ei tee tähdepäivää viikon ensimmäiselle päivälle eikä kahta peräkkäin', () => {
+    for (let seed = 1; seed < 40; seed++) {
+      const rules: Rules = { ...DEFAULTS, leftoverDays: 3 }
+      const { slots } = randomizeWeek(plan, SEED_RECIPES, rules, [], seeded(seed))
+      expect(slots[0]!.isLeftover).toBeFalsy()
+      for (let i = 1; i < slots.length; i++) {
+        expect(slots[i]!.isLeftover && slots[i - 1]!.isLeftover).toBeFalsy()
+      }
+    }
+  })
+
+  it('säilyttää lukitun kokkauspäivän tähdepäivineen', () => {
+    const lasagne = 'perus-lasagne'
+    const locked: WeekPlan = {
+      ...plan,
+      slots: plan.slots.map(s =>
+        s.day === 'la'
+          ? { ...s, recipeId: lasagne, isLocked: true }
+          : s.day === 'su'
+            ? { ...s, isLeftover: true }
+            : s,
+      ),
+    }
+    const { slots } = randomizeWeek(locked, SEED_RECIPES, DEFAULTS, [], seeded(9))
+    const resolved = resolveSlots(slots)
+    expect(resolved.find(s => s.day === 'su')!.eatenRecipeId).toBe(lasagne)
+    expect(slots.filter(s => s.isLeftover)).toHaveLength(2)
+  })
+
+  it('kauppalista tuplaa tähdepäivän ruoan määrät', () => {
+    const twoDays: WeekPlan = {
+      weekStart: '2026-10-05',
+      slots: [
+        { day: 'ma', recipeId: 'perus-chili', isLocked: false },
+        { day: 'ti', recipeId: null, isLocked: false, isLeftover: true },
+      ],
+    }
+    const list = buildShoppingList(twoDays, SEED_RECIPES, 4)
+    expect(list.find(i => i.key === 'jauheliha')!.amount).toBe('800 g')
+    expect(list.find(i => i.key === 'jauheliha')!.usedIn).toEqual(['Chili con carne'])
+  })
+
+  it('resolveSlots seuraa tähdeketjun kokkauspäivään', () => {
+    const r = resolveSlots([
+      { day: 'ma', recipeId: 'a', isLocked: false },
+      { day: 'ti', recipeId: null, isLocked: false, isLeftover: true },
+      { day: 'ke', recipeId: null, isLocked: false, isLeftover: true },
+      { day: 'to', recipeId: 'b', isLocked: false },
+    ])
+    expect(r.map(s => s.eatenRecipeId)).toEqual(['a', 'a', 'a', 'b'])
+    expect(r.map(s => s.coversDays)).toEqual([3, 0, 0, 1])
   })
 })
 
