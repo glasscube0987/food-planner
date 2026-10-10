@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import { Modal } from './components/common'
+import { HouseholdPanel } from './components/HouseholdPanel'
 import { RecipesView } from './components/RecipesView'
 import { RulesView } from './components/RulesView'
 import { ShoppingView } from './components/ShoppingView'
@@ -17,7 +18,8 @@ const TABS = [
 type Tab = (typeof TABS)[number]['id']
 
 export const App = () => {
-  const { data, update, replace, mode, error, clearError } = useAppData()
+  const app = useAppData()
+  const { data, update, replace, mode, error, clearError } = app
   const [tab, setTab] = useState<Tab>('week')
   const [showSharing, setShowSharing] = useState(false)
 
@@ -67,29 +69,16 @@ export const App = () => {
       </nav>
 
       {showSharing && (
-        <Modal title={mode === 'shared' ? 'Yhteinen lista' : 'Tiedot tällä laitteella'} onClose={() => setShowSharing(false)}>
-          {mode === 'shared' ? (
-            <>
-              <p>
-                Viikon suunnitelma, kauppalista, säännöt ja omat reseptit tallentuvat yhteisesti. Kaikki, joille tämä sivu on
-                jaettu muokkausoikeuksin, näkevät muutokset heti omalla laitteellaan.
-              </p>
-              <h4>Näin jaat listan puolisolle</h4>
-              <ol className="steps">
-                <li>Avaa tämän sivun Share-valikko (jakopainike sivun yläreunassa).</li>
-                <li>Kutsu puoliso sähköpostiosoitteella ja anna oikeudeksi Editor (muokkaaja).</li>
-                <li>Puoliso avaa linkin omalla puhelimellaan ja kirjautuu claude.ai-tililleen.</li>
-              </ol>
-              <p className="muted small">
-                Älä jaa sivua julkisella linkillä: silloin kutsutut muokkaajat eivät voi tallentaa muutoksia.
-              </p>
-            </>
-          ) : (
-            <p>
-              Tiedot tallentuvat vain tämän selaimen muistiin. Yhteinen lista on käytössä, kun sovellus avataan claude.ai-linkistä
-              kirjautuneena. Voit siirtää tiedot toiselle laitteelle Säännöt-välilehden Vie- ja Tuo-painikkeilla.
-            </p>
-          )}
+        <Modal title={mode === 'shared' ? 'Yhteinen lista' : 'Perheen yhteinen lista'} onClose={() => setShowSharing(false)}>
+          <HouseholdPanel
+            mode={mode}
+            kind={app.kind}
+            code={app.code}
+            canShare={app.canShare}
+            onCreate={app.createHousehold}
+            onJoin={app.joinHousehold}
+            onLeave={app.leaveHousehold}
+          />
         </Modal>
       )}
     </div>

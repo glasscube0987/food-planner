@@ -1,0 +1,17 @@
+rules_version = '2';
+
+// Ruokalistan Firestore-säännöt. Liitä nämä Firebase-konsolissa:
+// Firestore Database → Rules → korvaa sisältö → Publish.
+//
+// Perheen tiedot ovat polussa households/<perhekoodi>/<kokoelma>/<dokumentti>.
+// Lukeminen ja kirjoittaminen vaativat (anonyymin) kirjautumisen ja koko
+// perhekoodin: koodia ei voi arvata, eikä perheitä voi listata.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /households/{code}/{collection}/{docId} {
+      allow read, write: if request.auth != null
+        && code.size() == 24
+        && collection in ['household', 'recipes'];
+    }
+  }
+}

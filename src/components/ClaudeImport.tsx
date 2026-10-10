@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 
 import { parsePrompt, suggestPrompt, toRecipe } from '../lib/claudeRecipe'
+import { parseRecipeText } from '../lib/textRecipe'
 import type { Recipe } from '../lib/types'
 import { newId } from '../state'
 import { Modal } from './common'
@@ -14,8 +15,9 @@ const ERRORS: Record<string, string> = {
 }
 
 /**
- * Reseptin tuonti Clauden avulla: liitetty teksti mistä tahansa reseptisivusta
- * muunnetaan sovelluksen muotoon, tai Claude kirjoittaa reseptin toiveen pohjalta.
+ * Reseptin tuonti: liitetty teksti mistä tahansa reseptisivusta muunnetaan
+ * sovelluksen muotoon, tai Claude kirjoittaa reseptin toiveen pohjalta. Ilman
+ * Claudea (sovellus omassa osoitteessaan) teksti tulkitaan sovelluksessa itse.
  * Tulos avataan aina tarkistettavaksi ennen tallennusta.
  */
 export const ClaudeImport = ({
@@ -25,7 +27,7 @@ export const ClaudeImport = ({
   onClose,
 }: {
   mode: 'parse' | 'suggest'
-  sample: ClaudeSample
+  sample: ClaudeSample | null
   onRecipe: (recipe: Recipe) => void
   onClose: () => void
 }) => {
@@ -37,6 +39,12 @@ export const ClaudeImport = ({
   const run = async () => {
     const input = text.trim()
     if (!input) return
+    if (!sample) {
+      const recipe = parseRecipeText(input, `oma-${newId()}`)
+      if (recipe) onRecipe(recipe)
+      else setStatus('Tekstistä ei löytynyt aineksia. Tarkista, että mukana on ainesosaluettelo, jossa määrät ovat rivien alussa.')
+      return
+    }
     abort.current = new AbortController()
     setBusy(true)
     setStatus('Claude käsittelee reseptiä… tämä voi kestää puoli minuuttia.')
@@ -58,10 +66,16 @@ export const ClaudeImport = ({
 
   return (
     <Modal title={mode === 'parse' ? 'Liitä resepti netistä' : 'Kysy reseptiä Claudelta'} onClose={onClose}>
-      {mode === 'parse' ? (
+      {mode === 'parse' && sample ? (
         <p className="muted small">
           Avaa resepti millä tahansa sivustolla, valitse sivun teksti (tai pelkkä resepti) ja kopioi se tähän. Claude poimii
           ainekset ja ohjeen, kääntää tarvittaessa suomeksi ja päättelee ruokatyypin. Voit tarkistaa tuloksen ennen tallennusta.
+        </p>
+      ) : mode === 'parse' ? (
+        <p className="muted small">
+          Avaa resepti millä tahansa sivustolla, valitse reseptin nimi, ainekset ja ohje ja kopioi ne tähän. Sovellus poimii
+          rivit, jotka alkavat määrällä (esim. "400 g jauhelihaa"), aineksiksi ja muun tekstin ohjeeksi. Tarkista ja korjaa
+          tulos ennen tallennusta.
         </p>
       ) : (
         <p className="muted small">

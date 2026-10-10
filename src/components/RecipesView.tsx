@@ -53,7 +53,7 @@ export const RecipesView = ({ data, update }: { data: AppData; update: Update })
         <button className="primary" onClick={() => setEditing({ title: 'Uusi oma resepti' })}>
           + Oma resepti
         </button>
-        {sample && <button onClick={() => setAsking('parse')}>📋 Liitä resepti netistä</button>}
+        <button onClick={() => setAsking('parse')}>📋 Liitä resepti netistä</button>
         {sample && <button onClick={() => setAsking('suggest')}>✨ Kysy Claudelta</button>}
         {!window.claude && <button onClick={() => setImporting(true)}>🌐 Hae TheMealDB:stä</button>}
       </div>
@@ -90,7 +90,7 @@ export const RecipesView = ({ data, update }: { data: AppData; update: Update })
         />
       )}
 
-      {asking && sample && (
+      {asking && (asking === 'parse' || sample) && (
         <ClaudeImport
           mode={asking}
           sample={sample}
