@@ -1,7 +1,7 @@
 import type { Ingredient } from './types'
 
 const UNITS = [
-  'kg', 'g', 'l', 'dl', 'cl', 'ml', 'rkl', 'tl', 'mm', 'kpl', 'prk', 'pkt', 'pss', 'tlk', 'rs', 'nippu', 'kynsi', 'kynttä', 'viipale',
+  'kg', 'g', 'l', 'dl', 'cl', 'ml', 'rkl', 'tl', 'mm', 'kpl', 'prk', 'pkt', 'pss', 'tlk', 'rs', 'nippu', 'ruukku', 'kynsi', 'kynttä', 'viipale',
   'cup', 'cups', 'tbsp', 'tsp', 'oz', 'lb', 'lbs',
 ]
 

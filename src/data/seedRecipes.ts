@@ -1,4 +1,5 @@
 import { parseIngredientLines } from '../lib/parse'
+import { BLOG_RECIPES } from './blogRecipes'
 import type { Category, Recipe } from '../lib/types'
 
 /**
@@ -36,7 +37,7 @@ const recipe = (
   isOwn: false,
 })
 
-export const SEED_RECIPES: Recipe[] = [
+const BASIC_RECIPES: Recipe[] = [
   // Liha
   recipe('jauhelihakastike', 'Jauhelihakastike ja perunat', 'liha', 35, ['nopea', 'arki', 'lasten suosikki'], `
 400 g jauheliha
@@ -299,3 +300,6 @@ suola`, 'Soseuta kikherneet, sekoita sipuli, korppujauho ja muna, muotoile pihve
 sinappi
 suola`, 'Keitä herneet (pakasteherneet tai liotetut kuivaherneet), sipuli ja porkkana liemessä pehmeiksi. Mausta ja tarjoa sinapin kanssa.'),
 ]
+
+/** Sovelluksen mukana tulevat reseptit: perusreseptit ja blogista valitut suosikit. */
+export const SEED_RECIPES: Recipe[] = [...BASIC_RECIPES, ...BLOG_RECIPES]
