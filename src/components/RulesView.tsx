@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 
 import { DEFAULT_RULES, initialData, normalize } from '../lib/storage'
 import { CATEGORIES, CATEGORY_LABEL, DAYS, DAY_LABEL } from '../lib/types'
@@ -13,11 +14,14 @@ export const RulesView = ({
   update,
   replace,
   isShared,
+  family,
 }: {
   data: AppData
   update: Update
   replace: (d: AppData) => void
   isShared: boolean
+  /** Perhe-osio: yhteisen listan tila ja ohje puolison kutsumiseen. */
+  family: ReactNode
 }) => {
   const rules = data.rules
   const setRules = (patch: Partial<Rules>) => update(d => ({ ...d, rules: { ...d.rules, ...patch } }))
@@ -65,11 +69,11 @@ export const RulesView = ({
 
   return (
     <section>
-      <div className="section-head">
-        <div>
-          <h2>Arvonnan säännöt</h2>
-          <p className="muted">Nämä ohjaavat Arvo viikko ‑painiketta. Itse valittuihin ruokiin säännöt eivät vaikuta.</p>
-        </div>
+      <div className="block">
+        <h2>Säännöt</h2>
+        <p className="lede">
+          Nämä ohjaavat arvontaa ja Clauden viikkosuunnittelua. Itse valittuihin ruokiin säännöt eivät vaikuta.
+        </p>
       </div>
 
       <fieldset className="card">
@@ -97,7 +101,10 @@ export const RulesView = ({
           const value = rules.counts[c]
           return (
             <div key={c} className="count-row">
-              <span className={`badge badge-${c}`}>{CATEGORY_LABEL[c]}</span>
+              <span className="count-label">
+                <i className={`cat-dot cat-${c}`} aria-hidden="true" />
+                {CATEGORY_LABEL[c]}
+              </span>
               <div className="stepper">
                 <button
                   aria-label={`Vähemmän ${CATEGORY_LABEL[c]}`}
@@ -134,7 +141,7 @@ export const RulesView = ({
       <fieldset className="card">
         <legend>Tähdepäivät</legend>
         <div className="count-row">
-          <span>Tähdepäiviä viikossa</span>
+          <span className="count-label">Tähdepäiviä</span>
           <div className="stepper">
             <button aria-label="Vähemmän tähdepäiviä" onClick={() => setRules({ leftoverDays: Math.max(0, rules.leftoverDays - 1) })}>
               −
@@ -156,6 +163,7 @@ export const RulesView = ({
         <label>
           Arkipäivien (ma–pe) enimmäisvalmistusaika
           <select
+            id="weekday-max"
             value={rules.weekdayMaxMinutes ?? ''}
             onChange={e => setRules({ weekdayMaxMinutes: e.target.value ? Number(e.target.value) : null })}
           >
@@ -177,7 +185,7 @@ export const RulesView = ({
         </label>
         <label>
           Älä toista ruokia, jotka olivat listalla edellisinä viikkoina
-          <select value={rules.noRepeatWeeks} onChange={e => setRules({ noRepeatWeeks: Number(e.target.value) })}>
+          <select id="no-repeat" value={rules.noRepeatWeeks} onChange={e => setRules({ noRepeatWeeks: Number(e.target.value) })}>
             <option value={0}>saa toistua</option>
             {[1, 2, 3, 4].map(n => (
               <option key={n} value={n}>
@@ -202,6 +210,11 @@ export const RulesView = ({
       </fieldset>
 
       <fieldset className="card">
+        <legend>Perhe</legend>
+        {family}
+      </fieldset>
+
+      <fieldset className="card">
         <legend>Tiedot</legend>
         <p className="muted small">
           {isShared
@@ -209,8 +222,8 @@ export const RulesView = ({
             : 'Tiedot tallentuvat tämän selaimen muistiin. Vie ne tiedostoon varmuuskopioksi tai siirtääksesi ne toiselle laitteelle.'}
         </p>
         <div className="actions">
-          <button onClick={() => void exportData()}>⬇️ Vie tiedostoon</button>
-          <button onClick={() => fileInput.current?.click()}>⬆️ Tuo tiedostosta</button>
+          <button onClick={() => void exportData()}>Vie tiedostoon</button>
+          <button onClick={() => fileInput.current?.click()}>Tuo tiedostosta</button>
           <ConfirmButton
             className="danger"
             label="Palauta alkutilaan"

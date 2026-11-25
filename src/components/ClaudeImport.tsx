@@ -1,18 +1,12 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 
 import { parsePrompt, suggestPrompt, toRecipe } from '../lib/claudeRecipe'
 import { parseRecipeText } from '../lib/textRecipe'
 import type { Recipe } from '../lib/types'
+import { useClaudeRequest } from '../lib/useSample'
 import { newId } from '../state'
 import { Modal } from './common'
-
-const ERRORS: Record<string, string> = {
-  not_granted: 'Claude-avun käyttöä ei sallittu tälle sivulle.',
-  rate_limited: 'Claude on hetken varattu tai käyttöraja on täynnä. Yritä hetken päästä uudelleen.',
-  refused: 'Claude ei voinut käsitellä tätä tekstiä. Kokeile liittää pelkkä resepti.',
-  prompt_too_large: 'Teksti on liian pitkä. Liitä vain reseptin osuus sivusta.',
-  session_expired: 'Kirjaudu claude.ai-palveluun uudelleen ja yritä sitten.',
-}
+import { DictateButton } from './DictateButton'
 
 /**
  * Reseptin tuonti: liitetty teksti mistä tahansa reseptisivusta muunnetaan
@@ -22,72 +16,54 @@ const ERRORS: Record<string, string> = {
  */
 export const ClaudeImport = ({
   mode,
+  initialText = '',
   sample,
   onRecipe,
   onClose,
 }: {
   mode: 'parse' | 'suggest'
+  initialText?: string
   sample: ClaudeSample | null
   onRecipe: (recipe: Recipe) => void
   onClose: () => void
 }) => {
-  const [text, setText] = useState('')
+  const [text, setText] = useState(initialText)
   const [status, setStatus] = useState<string | null>(null)
-  const [isBusy, setBusy] = useState(false)
-  const abort = useRef<AbortController | null>(null)
+  const { run, isBusy, error, cancel } = useClaudeRequest()
 
-  const run = async () => {
+  const submit = async () => {
     const input = text.trim()
     if (!input) return
+    setStatus(null)
     if (!sample) {
       const recipe = parseRecipeText(input, `oma-${newId()}`)
       if (recipe) onRecipe(recipe)
       else setStatus('Tekstistä ei löytynyt aineksia. Tarkista, että mukana on ainesosaluettelo, jossa määrät ovat rivien alussa.')
       return
     }
-    abort.current = new AbortController()
-    setBusy(true)
-    setStatus('Claude käsittelee reseptiä… tämä voi kestää puoli minuuttia.')
-    try {
-      const raw = await sample.json(mode === 'parse' ? parsePrompt(input) : suggestPrompt(input), {
-        signal: abort.current.signal,
-        cache: mode === 'parse',
-      })
-      const recipe = toRecipe(raw, `oma-${newId()}`, mode === 'parse' ? 'Tuotu resepti' : 'Clauden ehdotus')
-      if (recipe) onRecipe(recipe)
-      else setStatus('Tekstistä ei löytynyt reseptiä, jossa olisi nimi ja ainekset. Tarkista liitetty teksti.')
-    } catch (e) {
-      const code = (e as { code?: string }).code ?? ''
-      setStatus(code === 'cancelled' ? null : (ERRORS[code] ?? 'Tuonti epäonnistui. Yritä uudelleen.'))
-    } finally {
-      setBusy(false)
-    }
+    const raw = await run(signal =>
+      sample.json(mode === 'parse' ? parsePrompt(input) : suggestPrompt(input), { signal, cache: mode === 'parse' }),
+    )
+    if (raw === undefined) return
+    const recipe = toRecipe(raw, `oma-${newId()}`, mode === 'parse' ? 'Tuotu resepti' : 'Clauden ehdotus')
+    if (recipe) onRecipe(recipe)
+    else setStatus('Tekstistä ei löytynyt reseptiä, jossa olisi nimi ja ainekset. Tarkista liitetty teksti.')
   }
 
   return (
     <Modal title={mode === 'parse' ? 'Liitä resepti netistä' : 'Kysy reseptiä Claudelta'} onClose={onClose}>
-      {mode === 'parse' && sample ? (
-        <p className="muted small">
-          Avaa resepti millä tahansa sivustolla, valitse sivun teksti (tai pelkkä resepti) ja kopioi se tähän. Claude poimii
-          ainekset ja ohjeen, kääntää tarvittaessa suomeksi ja päättelee ruokatyypin. Voit tarkistaa tuloksen ennen tallennusta.
-        </p>
-      ) : mode === 'parse' ? (
-        <p className="muted small">
-          Avaa resepti millä tahansa sivustolla, valitse reseptin nimi, ainekset ja ohje ja kopioi ne tähän. Sovellus poimii
-          rivit, jotka alkavat määrällä (esim. "400 g jauhelihaa"), aineksiksi ja muun tekstin ohjeeksi. Tarkista ja korjaa
-          tulos ennen tallennusta.
-        </p>
-      ) : (
-        <p className="muted small">
-          Kirjoita ruoan nimi tai toive, esimerkiksi "karjalanpaisti", "nopea kasviskeitto lapsille" tai "jotain broilerista
-          uunissa". Claude kirjoittaa reseptin, jonka voit tarkistaa ennen tallennusta.
-        </p>
-      )}
+      <p className="lede">
+        {mode === 'suggest'
+          ? 'Kirjoita ruoan nimi tai toive, esimerkiksi "karjalanpaisti" tai "nopea kasviskeitto lapsille". Claude kirjoittaa reseptin, jonka voit tarkistaa ennen tallennusta.'
+          : sample
+            ? 'Avaa resepti millä tahansa sivustolla, valitse sivun teksti ja kopioi se tähän. Claude poimii ainekset ja ohjeen, kääntää tarvittaessa suomeksi ja päättelee ruokatyypin.'
+            : 'Avaa resepti millä tahansa sivustolla, valitse nimi, ainekset ja ohje ja kopioi ne tähän. Rivit, jotka alkavat määrällä (esim. "400 g jauhelihaa"), tulevat aineksiksi ja muu teksti ohjeeksi. Tarkista tulos ennen tallennusta.'}
+      </p>
       <form
         className="form"
         onSubmit={e => {
           e.preventDefault()
-          void run()
+          void submit()
         }}
       >
         {mode === 'parse' ? (
@@ -110,16 +86,19 @@ export const ClaudeImport = ({
         )}
         <div className="actions">
           <button type="submit" className="primary" disabled={isBusy || !text.trim()}>
-            {mode === 'parse' ? 'Tuo resepti' : 'Kirjoita resepti'}
+            {isBusy ? 'Claude miettii…' : mode === 'parse' ? 'Tuo resepti' : 'Kirjoita resepti'}
           </button>
-          {isBusy && (
-            <button type="button" onClick={() => abort.current?.abort()}>
+          {isBusy ? (
+            <button type="button" onClick={cancel}>
               Keskeytä
             </button>
+          ) : (
+            mode === 'suggest' && <DictateButton onText={f => setText(f)} />
           )}
         </div>
       </form>
-      {status && <p className={isBusy ? 'muted' : 'notice'}>{status}</p>}
+      {isBusy && <p className="muted small">Tämä kestää yleensä puolesta minuutista minuuttiin.</p>}
+      {(error || status) && <p className="notice">{error ?? status}</p>}
     </Modal>
   )
 }

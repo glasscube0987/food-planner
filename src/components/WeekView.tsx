@@ -3,22 +3,28 @@ import { useState } from 'react'
 import { randomizeWeek } from '../lib/randomize'
 import { addWeeks, emptyPlan } from '../lib/storage'
 import { CATEGORIES, DAYS, DAY_GENITIVE, DAY_LABEL, resolveSlots } from '../lib/types'
-import type { AppData, Day, PlanSlot, Recipe } from '../lib/types'
+import type { AppData, Day, PlanSlot } from '../lib/types'
+import { newId } from '../state'
 import type { Update } from '../state'
-import { ConfirmButton, Modal, RecipeDetails, RecipeMeta, RecipePicker } from './common'
+import { AiWeekPanel } from './AiWeekPanel'
+import { ConfirmButton, Modal, RecipeDetails, RecipeMeta, RecipePicker, dayDate } from './common'
+import { FridgePanel } from './FridgePanel'
 
-const formatWeek = (weekStart: string) => {
-  const [y, m, d] = weekStart.split('-').map(Number)
-  const start = new Date(y!, m! - 1, d!)
-  const end = new Date(y!, m! - 1, d! + 6)
-  const f = (date: Date) => `${date.getDate()}.${date.getMonth() + 1}.`
-  return `${f(start)}–${f(end)}${end.getFullYear()}`
-}
-
-export const WeekView = ({ data, update, onShopping }: { data: AppData; update: Update; onShopping: () => void }) => {
+export const WeekView = ({
+  data,
+  update,
+  sample,
+  onWriteRecipe,
+}: {
+  data: AppData
+  update: Update
+  sample: ClaudeSample | null
+  onWriteRecipe: (name: string) => void
+}) => {
   const [warnings, setWarnings] = useState<string[]>([])
+  const [openDay, setOpenDay] = useState<Day | null>(null)
   const [picking, setPicking] = useState<Day | null>(null)
-  const [viewing, setViewing] = useState<Recipe | null>(null)
+  const [panel, setPanel] = useState<'week' | 'fridge' | null>(null)
 
   const byId = new Map(data.recipes.map(r => [r.id, r]))
   const resolved = resolveSlots(data.plan.slots)
@@ -32,14 +38,17 @@ export const WeekView = ({ data, update, onShopping }: { data: AppData; update: 
       plan: { ...d.plan, slots: d.plan.slots.map(s => (s.day === day ? { ...s, ...patch } : s)) },
     }))
 
-  const randomizeAll = () => {
-    const { slots, warnings } = randomizeWeek(data.plan, data.recipes, data.rules, data.history)
-    setWarnings(warnings)
+  const applyWeek = (slots: PlanSlot[]) =>
     update(d => ({
       ...d,
       checked: [],
       plan: { ...d.plan, slots: d.plan.slots.map(s => slots.find(n => n.day === s.day) ?? s) },
     }))
+
+  const randomizeAll = () => {
+    const { slots, warnings } = randomizeWeek(data.plan, data.recipes, data.rules, data.history)
+    setWarnings(warnings)
+    applyWeek(slots)
   }
 
   /**
@@ -62,7 +71,7 @@ export const WeekView = ({ data, update, onShopping }: { data: AppData; update: 
     )
     setWarnings(warnings)
     const picked = slots[0]?.recipeId
-    if (picked) setSlot(day, { recipeId: picked })
+    if (picked) setSlot(day, { recipeId: picked, isLeftover: false })
   }
 
   const startNextWeek = () => {
@@ -72,44 +81,41 @@ export const WeekView = ({ data, update, onShopping }: { data: AppData; update: 
       plan: emptyPlan(addWeeks(d.plan.weekStart, 1)),
       checked: [],
       extras: [],
+      tidy: null,
     }))
     setWarnings([])
   }
 
+  const addMissing = (items: string[]) =>
+    update(d => {
+      const have = new Set(d.extras.map(e => e.text.toLowerCase()))
+      const extras = items.filter(t => !have.has(t.toLowerCase())).map(text => ({ id: newId(), text }))
+      return extras.length ? { ...d, extras: [...d.extras, ...extras] } : d
+    })
+
+  const sheetSlot = openDay ? resolved.find(s => s.day === openDay) : undefined
+  const sheetRecipe = sheetSlot?.eatenRecipeId ? byId.get(sheetSlot.eatenRecipeId) : undefined
+
   return (
     <section>
-      <div className="section-head">
-        <div>
-          <h2>Viikko {formatWeek(data.plan.weekStart)}</h2>
-          <p className="muted">
-            {planned}/{data.plan.slots.length} päivää suunniteltu
-            {planned > 0 && (
-              <>
-                {' '}· {cookings} kokkauskertaa{leftoverCount > 0 && `, ${leftoverCount} tähdepäivää`}
-              </>
-            )}
-          </p>
+      <div className="block">
+        <p className="lede">
+          {planned === 0
+            ? 'Viikko on tyhjä. Suunnittele se Clauden kanssa, arvo säännöillä tai napauta päivää ja valitse itse.'
+            : `${planned}/7 päivää suunniteltu · ${cookings} kokkauskertaa${leftoverCount > 0 ? `, ${leftoverCount} tähdepäivää` : ''}`}
+        </p>
+        <div className="actions">
+          {sample && (
+            <button className="primary" onClick={() => setPanel('week')}>
+              Suunnittele Clauden kanssa
+            </button>
+          )}
+          <button className={sample ? undefined : 'primary'} onClick={randomizeAll}>
+            Arvo viikko
+          </button>
+          {sample && <button onClick={() => setPanel('fridge')}>Mitä kaapista?</button>}
         </div>
       </div>
-
-      <div className="actions">
-        <button className="primary" onClick={randomizeAll}>
-          🎲 Arvo viikko
-        </button>
-        <button onClick={onShopping} disabled={planned === 0}>
-          🛒 Kauppalista
-        </button>
-        <ConfirmButton
-          label="➡️ Seuraava viikko"
-          confirmLabel="Paina uudelleen: tämä viikko historiaan"
-          skip={planned === 0}
-          onConfirm={startNextWeek}
-        />
-      </div>
-      <p className="muted small">
-        Arvonta noudattaa Säännöt-välilehden asetuksia. Lukitut 🔒 päivät pysyvät ennallaan. 🥡 tekee päivästä tähdepäivän:
-        syödään edellisen päivän ruokaa.
-      </p>
 
       {warnings.length > 0 && (
         <div className="notice" role="status">
@@ -120,84 +126,78 @@ export const WeekView = ({ data, update, onShopping }: { data: AppData; update: 
       )}
 
       <ol className="days">
-        {resolved.map(slot => {
+        {resolved.map((slot, index) => {
           const recipe = slot.eatenRecipeId ? byId.get(slot.eatenRecipeId) : undefined
           const isPlannedDay = data.rules.days.includes(slot.day)
-          const previous = DAYS.indexOf(slot.day) > 0 ? resolved.find(s => s.day === DAYS[DAYS.indexOf(slot.day) - 1]) : undefined
-          const canBeLeftover = Boolean(previous?.eatenRecipeId)
-          const isLeftover = Boolean(slot.isLeftover)
-          const isLocked = isLeftover
-            ? Boolean(data.plan.slots.find(s => s.day === slot.cookedOn)?.isLocked)
-            : slot.isLocked
+          const cookLocked = data.plan.slots.find(s => s.day === slot.cookedOn)?.isLocked
+          const classes = [
+            'day',
+            recipe ? `cat-${recipe.category}` : '',
+            slot.isLeftover ? 'is-leftover' : '',
+            isPlannedDay ? '' : 'is-off',
+          ]
           return (
-            <li key={slot.day} className={['day', isPlannedDay ? '' : 'is-off', isLeftover ? 'is-leftover' : ''].join(' ').trim()}>
-              <div className="day-name">
-                {DAY_LABEL[slot.day]}
-                {!isPlannedDay && <span className="muted small"> · ei arvota</span>}
-              </div>
-              {recipe ? (
-                <button className="day-recipe" onClick={() => setViewing(recipe)}>
-                  {isLeftover && <span className="leftover-label">🥡 Tähteet: {DAY_GENITIVE[slot.cookedOn!]} ruoka</span>}
-                  <span className="row-title">{recipe.name}</span>
-                  {!isLeftover && (
+            <li key={slot.day}>
+              <button className={classes.join(' ').trim()} onClick={() => setOpenDay(slot.day)}>
+                <span className="when">
+                  {DAY_LABEL[slot.day].slice(0, 2)}
+                  <small>{dayDate(data.plan.weekStart, index)}</small>
+                </span>
+                <span className="what">
+                  {slot.isLeftover && recipe && <span className="muted small">Tähteet: {DAY_GENITIVE[slot.cookedOn!]} ruoka</span>}
+                  {recipe ? <span className="name">{recipe.name}</span> : <span className="empty">Valitse ruoka</span>}
+                  {recipe && !slot.isLeftover && (
                     <span className="meta">
                       <RecipeMeta recipe={recipe} />
-                      {slot.coversDays > 1 && <span className="batch">Tuplasatsi · riittää {slot.coversDays} päivälle</span>}
+                      {slot.coversDays > 1 && <span className="tag accent">tuplasatsi</span>}
+                      {cookLocked && <span className="tag">lukittu</span>}
                     </span>
                   )}
-                </button>
-              ) : (
-                <button className="day-recipe is-empty" onClick={() => setPicking(slot.day)}>
-                  + Valitse ruoka
-                </button>
-              )}
-              <div className="day-tools">
-                <button
-                  className={isLeftover ? 'icon is-active' : 'icon'}
-                  onClick={() =>
-                    setSlot(slot.day, isLeftover ? { isLeftover: false } : { isLeftover: true, recipeId: null, isLocked: false })
-                  }
-                  disabled={!isLeftover && !canBeLeftover}
-                  aria-label={isLeftover ? 'Kokataan tänään uutta' : 'Tähdepäivä: syödään edellisen päivän ruokaa'}
-                  title={isLeftover ? 'Kokataan tänään uutta' : 'Tähdepäivä: syödään edellisen päivän ruokaa'}
-                >
-                  🥡
-                </button>
-                <button
-                  className={isLocked ? 'icon is-active' : 'icon'}
-                  onClick={() => setSlot(slot.day, { isLocked: !slot.isLocked })}
-                  disabled={!recipe || isLeftover}
-                  aria-label={isLocked ? 'Avaa lukitus' : 'Lukitse'}
-                  title={isLeftover ? 'Lukitse kokkauspäivä' : isLocked ? 'Avaa lukitus' : 'Lukitse'}
-                >
-                  {isLocked ? '🔒' : '🔓'}
-                </button>
-                <button
-                  className="icon"
-                  onClick={() => reroll(slot.day)}
-                  disabled={isLocked || isLeftover}
-                  aria-label="Arvo uudelleen"
-                  title="Arvo uudelleen"
-                >
-                  🎲
-                </button>
-                <button className="icon" onClick={() => setPicking(slot.day)} aria-label="Valitse itse" title="Valitse itse">
-                  ✏️
-                </button>
-                <button
-                  className="icon"
-                  onClick={() => setSlot(slot.day, { recipeId: null, isLocked: false, isLeftover: false })}
-                  disabled={!recipe}
-                  aria-label="Tyhjennä"
-                  title="Tyhjennä"
-                >
-                  ✕
-                </button>
-              </div>
+                  {!isPlannedDay && <span className="muted small">Ei arvota</span>}
+                </span>
+              </button>
             </li>
           )
         })}
       </ol>
+
+      <div className="actions">
+        <ConfirmButton
+          label="Aloita seuraava viikko"
+          confirmLabel="Vahvista: tämä viikko siirtyy historiaan"
+          skip={planned === 0}
+          onConfirm={startNextWeek}
+        />
+      </div>
+
+      {openDay && sheetSlot && (
+        <DaySheet
+          day={openDay}
+          dateText={dayDate(data.plan.weekStart, DAYS.indexOf(openDay))}
+          recipeName={sheetRecipe?.name}
+          details={sheetRecipe ? <RecipeDetails recipe={sheetRecipe} /> : null}
+          isLeftover={Boolean(sheetSlot.isLeftover)}
+          leftoverText={sheetSlot.isLeftover && sheetSlot.cookedOn ? `Tähteet: ${DAY_GENITIVE[sheetSlot.cookedOn]} ruoka` : null}
+          canBeLeftover={Boolean(
+            DAYS.indexOf(openDay) > 0 && resolved.find(s => s.day === DAYS[DAYS.indexOf(openDay) - 1])?.eatenRecipeId,
+          )}
+          isLocked={sheetSlot.isLocked}
+          onClose={() => setOpenDay(null)}
+          onPick={() => {
+            setPicking(openDay)
+            setOpenDay(null)
+          }}
+          onReroll={() => reroll(openDay)}
+          onToggleLeftover={() =>
+            setSlot(openDay, sheetSlot.isLeftover ? { isLeftover: false } : { isLeftover: true, recipeId: null, isLocked: false })
+          }
+          onToggleLock={() => setSlot(openDay, { isLocked: !sheetSlot.isLocked })}
+          onClear={() => {
+            setSlot(openDay, { recipeId: null, isLocked: false, isLeftover: false })
+            setOpenDay(null)
+          }}
+        />
+      )}
 
       {picking && (
         <RecipePicker
@@ -212,11 +212,95 @@ export const WeekView = ({ data, update, onShopping }: { data: AppData; update: 
         />
       )}
 
-      {viewing && (
-        <Modal title={viewing.name} onClose={() => setViewing(null)}>
-          <RecipeDetails recipe={viewing} />
-        </Modal>
+      {panel === 'week' && sample && (
+        <AiWeekPanel
+          data={data}
+          sample={sample}
+          onClose={() => setPanel(null)}
+          onApply={slots => {
+            applyWeek(slots)
+            setWarnings([])
+            setPanel(null)
+          }}
+        />
+      )}
+
+      {panel === 'fridge' && sample && (
+        <FridgePanel
+          data={data}
+          sample={sample}
+          onClose={() => setPanel(null)}
+          onAddToDay={(day, recipeId) => setSlot(day, { recipeId, isLeftover: false })}
+          onAddMissing={addMissing}
+          onWriteRecipe={name => {
+            setPanel(null)
+            onWriteRecipe(name)
+          }}
+        />
       )}
     </section>
+  )
+}
+
+/** Päivän toiminnot alapaneelissa: resepti, vaihto, arvonta, tähteet, lukitus ja tyhjennys. */
+const DaySheet = ({
+  day,
+  dateText,
+  recipeName,
+  details,
+  isLeftover,
+  leftoverText,
+  canBeLeftover,
+  isLocked,
+  onClose,
+  onPick,
+  onReroll,
+  onToggleLeftover,
+  onToggleLock,
+  onClear,
+}: {
+  day: Day
+  dateText: string
+  recipeName?: string
+  details: React.ReactNode
+  isLeftover: boolean
+  leftoverText: string | null
+  canBeLeftover: boolean
+  isLocked: boolean
+  onClose: () => void
+  onPick: () => void
+  onReroll: () => void
+  onToggleLeftover: () => void
+  onToggleLock: () => void
+  onClear: () => void
+}) => {
+  const [showRecipe, setShowRecipe] = useState(false)
+
+  return (
+    <Modal title={`${DAY_LABEL[day]} ${dateText}`} onClose={onClose}>
+      {leftoverText && <p className="muted small">{leftoverText}</p>}
+      <h2>{recipeName ?? 'Ei ruokaa valittuna'}</h2>
+      {details && showRecipe && details}
+      <div className="sheet-actions">
+        {details && <button onClick={() => setShowRecipe(v => !v)}>{showRecipe ? 'Piilota resepti' : 'Näytä resepti'}</button>}
+        <button onClick={onPick}>{recipeName && !isLeftover ? 'Vaihda ruoka' : 'Valitse ruoka'}</button>
+        {!isLeftover && (
+          <button onClick={onReroll} disabled={isLocked}>
+            Arvo uudelleen
+          </button>
+        )}
+        {(isLeftover || canBeLeftover) && (
+          <button onClick={onToggleLeftover}>{isLeftover ? 'Kokataan tänään uutta' : 'Tähteet edellisestä päivästä'}</button>
+        )}
+        {recipeName && !isLeftover && (
+          <button onClick={onToggleLock}>{isLocked ? 'Avaa lukitus' : 'Lukitse (arvonta ei muuta)'}</button>
+        )}
+        {recipeName && (
+          <button className="danger" onClick={onClear}>
+            Tyhjennä päivä
+          </button>
+        )}
+      </div>
+    </Modal>
   )
 }

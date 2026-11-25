@@ -29,16 +29,20 @@ export const HouseholdPanel = ({
   if (kind === 'claude') {
     return (
       <>
-        <p>
-          Viikon suunnitelma, kauppalista, säännöt ja omat reseptit tallentuvat yhteisesti. Kaikki, joille tämä sivu on jaettu
-          muokkausoikeuksin, näkevät muutokset heti omalla laitteellaan.
+        <p className="small">
+          Viikon suunnitelma, kauppalista, säännöt ja omat reseptit ovat yhteisiä. Kaikki, joille sivu on jaettu muokkaajina,
+          näkevät muutokset heti omalla puhelimellaan.
         </p>
-        <h4>Näin jaat listan</h4>
+        <h3>Kutsu puoliso</h3>
         <ol className="steps">
           <li>Avaa tämän sivun Share-valikko.</li>
-          <li>Kutsu henkilö sähköpostiosoitteella ja anna oikeudeksi Editor (muokkaaja).</li>
-          <li>Hän avaa linkin ja kirjautuu claude.ai-tililleen.</li>
+          <li>Kutsu puoliso sähköpostiosoitteella ja anna oikeudeksi Editor.</li>
+          <li>Puoliso avaa kutsun puhelimellaan ja kirjautuu claude.ai-tililleen.</li>
         </ol>
+        <p className="muted small">
+          Älä jaa sivua julkisella linkillä: silloin kutsuttu ei voi tallentaa muutoksia. Clauden apu kuluttaa sen henkilön
+          käyttökiintiötä, joka painiketta painaa.
+        </p>
       </>
     )
   }
@@ -79,7 +83,7 @@ export const HouseholdPanel = ({
             ? 'Tämä puhelin on perheen yhteisessä listassa. Muutokset näkyvät kaikille listaan liittyneille heti.'
             : 'Yhdistetään perheen yhteiseen listaan…'}
         </p>
-        <h4>Kutsu puoliso</h4>
+        <h3>Kutsu puoliso</h3>
         <ol className="steps">
           <li>Lähetä alla oleva linkki puolisolle, esimerkiksi WhatsAppissa tai tekstiviestillä.</li>
           <li>Puoliso avaa linkin puhelimellaan. Tunnuksia ei tarvita.</li>
@@ -87,7 +91,7 @@ export const HouseholdPanel = ({
         </ol>
         <div className="actions">
           <button className="primary" onClick={() => void share()}>
-            {copied ? '✓ Linkki kopioitu' : '📤 Jaa kutsulinkki'}
+            {copied ? 'Linkki kopioitu' : 'Jaa kutsulinkki'}
           </button>
         </div>
         <textarea
@@ -118,14 +122,14 @@ export const HouseholdPanel = ({
         Nyt tiedot ovat vain tässä puhelimessa. Yhteisen listan avulla sinä ja puoliso näette saman viikon, kauppalistan ja
         reseptit omilla puhelimillanne. Tunnuksia ei tarvita.
       </p>
-      <h4>Aloita yhteinen lista</h4>
+      <h3>Aloita yhteinen lista</h3>
       <p className="muted small">Tämän puhelimen nykyinen suunnitelma ja omat reseptit siirtyvät yhteiseen listaan.</p>
       <div className="actions">
         <button className="primary" onClick={() => onCreate(newHouseholdCode())}>
-          👥 Luo yhteinen lista
+          Luo yhteinen lista
         </button>
       </div>
-      <h4>Tai liity puolison listaan</h4>
+      <h3>Tai liity puolison listaan</h3>
       <p className="muted small">Avaa puolisolta saamasi kutsulinkki, tai liitä se tähän.</p>
       <form
         className="row"

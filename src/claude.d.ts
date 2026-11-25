@@ -30,10 +30,19 @@ type ClaudeSample = ((input: string, options?: { signal?: AbortSignal }) => Prom
 
 type ClaudeDownloads = { save(request: { filename: string; data: string }): Promise<unknown> }
 
+type ClaudeDictation = {
+  start(options?: { language?: string }): Promise<void>
+  stop(): Promise<void>
+  onPartial(handler: (e: { text: string }) => void): () => void
+  onFinal(handler: (e: { text: string }) => void): () => void
+  onState(handler: (e: { state: 'idle' | 'starting' | 'listening' | 'finishing'; reason?: string }) => void): () => void
+}
+
 type ClaudeCapabilities = {
   db: ClaudeDb
   sample: ClaudeSample
   downloads: ClaudeDownloads
+  dictation: ClaudeDictation
 }
 
 interface Window {

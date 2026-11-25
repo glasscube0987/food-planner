@@ -98,6 +98,16 @@ export type Rules = {
 
 export type ShoppingExtra = { id: string; text: string }
 
+/** Kauppalistan rivi Clauden järjestämänä: samat ainekset eri nimillä yhdistettynä. */
+export type TidyItem = { keys: string[]; name: string; amount: string }
+export type TidyGroup = { aisle: string; items: TidyItem[] }
+
+/**
+ * Clauden järjestämä kauppalista. `basis` kertoo, mistä listasta järjestys tehtiin;
+ * jos lista on sen jälkeen muuttunut, järjestys ei enää päde.
+ */
+export type ShoppingTidy = { basis: string; groups: TidyGroup[] }
+
 export type AppData = {
   version: 1
   recipes: Recipe[]
@@ -110,6 +120,8 @@ export type AppData = {
   /** Kauppalistan rivit, jotka on jo merkitty ostetuiksi (rivin avaimella). */
   checked: string[]
   extras: ShoppingExtra[]
+  /** Kauppalistan järjestys osastoittain, tai null kun listaa ei ole järjestetty. */
+  tidy: ShoppingTidy | null
 }
 
 /** Päivän ruoka sellaisena kuin se syödään: tähdepäivällä edellisen päivän ruoka. */

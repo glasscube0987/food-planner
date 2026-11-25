@@ -1,22 +1,40 @@
 import { useEffect, useState } from 'react'
 
-import { ClaudeImport } from './ClaudeImport'
-
 import { randomMeals, searchMeals } from '../lib/mealdb'
 import { formatIngredient, parseIngredientLines } from '../lib/parse'
 import { CATEGORIES, CATEGORY_LABEL } from '../lib/types'
 import type { AppData, Category, Recipe } from '../lib/types'
 import { newId } from '../state'
 import type { Update } from '../state'
+import { ClaudeImport } from './ClaudeImport'
 import { ConfirmButton, Modal, RecipeDetails, RecipeMeta, useRecipeFilter } from './common'
 
-export const RecipesView = ({ data, update }: { data: AppData; update: Update }) => {
+export const RecipesView = ({
+  data,
+  update,
+  sample,
+  suggest,
+  onSuggestShown,
+}: {
+  data: AppData
+  update: Update
+  sample: ClaudeSample | null
+  /** Ruoan nimi, jolle Claude kirjoittaa reseptin heti näkymän avautuessa (jääkaappi-ideoista). */
+  suggest: string | null
+  onSuggestShown: () => void
+}) => {
   const { filtered, controls } = useRecipeFilter(data.recipes)
   const [open, setOpen] = useState<string | null>(null)
   const [editing, setEditing] = useState<{ recipe?: Recipe; title: string } | null>(null)
   const [importing, setImporting] = useState(false)
-  const [asking, setAsking] = useState<'parse' | 'suggest' | null>(null)
-  const sample = useSample()
+  const [asking, setAsking] = useState<{ mode: 'parse' | 'suggest'; text?: string } | null>(null)
+
+  useEffect(() => {
+    if (suggest && sample) {
+      setAsking({ mode: 'suggest', text: suggest })
+      onSuggestShown()
+    }
+  }, [suggest, sample, onSuggestShown])
 
   const counts = Object.fromEntries(CATEGORIES.map(c => [c, data.recipes.filter(r => r.category === c).length]))
 
@@ -40,22 +58,23 @@ export const RecipesView = ({ data, update }: { data: AppData; update: Update })
 
   return (
     <section>
-      <div className="section-head">
-        <div>
-          <h2>Ruokapooli</h2>
-          <p className="muted">
-            {data.recipes.length} reseptiä · {CATEGORIES.map(c => `${CATEGORY_LABEL[c].toLowerCase()} ${counts[c]}`).join(' · ')}
-          </p>
+      <div className="block">
+        <h2>Ruokapooli</h2>
+        <p className="lede">
+          {data.recipes.length} reseptiä · {CATEGORIES.map(c => `${CATEGORY_LABEL[c].toLowerCase()} ${counts[c]}`).join(' · ')}
+        </p>
+        <div className="actions">
+          {sample && (
+            <button className="primary" onClick={() => setAsking({ mode: 'suggest' })}>
+              Kysy reseptiä Claudelta
+            </button>
+          )}
+          <button onClick={() => setAsking({ mode: 'parse' })}>Liitä resepti netistä</button>
+          <button className={sample ? undefined : 'primary'} onClick={() => setEditing({ title: 'Uusi oma resepti' })}>
+            Kirjoita oma
+          </button>
+          {!window.claude && <button onClick={() => setImporting(true)}>Hae TheMealDB:stä</button>}
         </div>
-      </div>
-
-      <div className="actions">
-        <button className="primary" onClick={() => setEditing({ title: 'Uusi oma resepti' })}>
-          + Oma resepti
-        </button>
-        <button onClick={() => setAsking('parse')}>📋 Liitä resepti netistä</button>
-        {sample && <button onClick={() => setAsking('suggest')}>✨ Kysy Claudelta</button>}
-        {!window.claude && <button onClick={() => setImporting(true)}>🌐 Hae TheMealDB:stä</button>}
       </div>
 
       {controls}
@@ -90,9 +109,10 @@ export const RecipesView = ({ data, update }: { data: AppData; update: Update })
         />
       )}
 
-      {asking && (asking === 'parse' || sample) && (
+      {asking && (asking.mode === 'parse' || sample) && (
         <ClaudeImport
-          mode={asking}
+          mode={asking.mode}
+          initialText={asking.text}
           sample={sample}
           onClose={() => setAsking(null)}
           onRecipe={recipe => {
@@ -111,19 +131,6 @@ export const RecipesView = ({ data, update }: { data: AppData; update: Update })
       )}
     </section>
   )
-}
-
-/** Clauden kysymisominaisuus, kun sovellus on avattu claude.ai-artifaktina; muuten null. */
-const useSample = () => {
-  const [sample, setSample] = useState<ClaudeSample | null>(null)
-  useEffect(() => {
-    let isActive = true
-    void window.claude?.use('sample').then(s => isActive && setSample(() => s))
-    return () => {
-      isActive = false
-    }
-  }, [])
-  return sample
 }
 
 const RecipeForm = ({
@@ -275,7 +282,7 @@ const ImportDialog = ({
         </div>
       </form>
       <div className="actions">
-        <button onClick={() => void run(() => randomMeals(6))}>🎲 6 satunnaista</button>
+        <button onClick={() => void run(() => randomMeals(6))}>6 satunnaista</button>
       </div>
       {status && <p className="muted">{status}</p>}
       <ul className="list">
@@ -301,7 +308,7 @@ const ImportDialog = ({
                     setAdded(s => new Set(s).add(r.id))
                   }}
                 >
-                  {isIn ? '✓ Poolissa' : 'Lisää pooliin'}
+                  {isIn ? 'Poolissa' : 'Lisää pooliin'}
                 </button>
               </div>
               {open === r.id && <RecipeDetails recipe={r} />}

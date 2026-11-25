@@ -1,6 +1,6 @@
 import { SEED_RECIPES } from '../data/seedRecipes'
 import { DEFAULT_RULES, emptyPlan, mondayOf } from './storage'
-import type { AppData, Recipe, Rules, ShoppingExtra, WeekPlan } from './types'
+import type { AppData, Recipe, Rules, ShoppingExtra, ShoppingTidy, WeekPlan } from './types'
 
 /**
  * Yhteisen tallennuksen muoto. Tiedot on jaettu dokumentteihin sen mukaan, kuka niitä
@@ -9,7 +9,8 @@ import type { AppData, Recipe, Rules, ShoppingExtra, WeekPlan } from './types'
  *
  * - `household/settings`: säännöt, ruokailijat ja piilotetut perusreseptit
  * - `household/week`: viikon suunnitelma ja aiemmat viikot
- * - `household/shopping`: ostetuksi merkityt rivit (avain → true/false) ja muut ostokset
+ * - `household/shopping`: ostetuksi merkityt rivit (avain → true/false), muut ostokset
+ *   ja Clauden tekemä järjestys osastoittain
  * - `recipes/<id>`: omat ja tuodut reseptit sekä muokatut perusreseptit
  *
  * Perusreseptit tulevat sovelluksen mukana, joten niitä ei tallenneta erikseen.
@@ -24,7 +25,7 @@ export const PATHS = {
 export type SharedParts = {
   settings: { rules?: Partial<Rules>; household?: number; hiddenRecipeIds?: string[] } | null
   week: { plan?: WeekPlan; history?: WeekPlan[] } | null
-  shopping: { checked?: Record<string, boolean>; extras?: ShoppingExtra[] } | null
+  shopping: { checked?: Record<string, boolean>; extras?: ShoppingExtra[]; tidy?: ShoppingTidy | null } | null
   recipes: Map<string, Recipe>
 }
 
@@ -57,6 +58,7 @@ export const compose = (parts: SharedParts, now = new Date()): AppData => {
       .filter(([, isChecked]) => isChecked)
       .map(([key]) => key),
     extras: parts.shopping?.extras ?? [],
+    tidy: parts.shopping?.tidy ?? null,
   }
 }
 
@@ -94,8 +96,12 @@ export const diff = (prev: AppData, next: AppData): Write[] => {
     writes.push({ path: PATHS.week, op: 'set', data: plain({ plan: next.plan, history: next.history }) })
   }
 
-  if (prev.checked !== next.checked || prev.extras !== next.extras) {
-    const fallback = plain({ checked: Object.fromEntries(next.checked.map(k => [k, true])), extras: next.extras })
+  if (prev.checked !== next.checked || prev.extras !== next.extras || prev.tidy !== next.tidy) {
+    const fallback = plain({
+      checked: Object.fromEntries(next.checked.map(k => [k, true])),
+      extras: next.extras,
+      tidy: next.tidy,
+    })
     if (next.checked.length === 0 && prev.checked.length > 0) {
       // Kaikki merkinnät pois (uusi viikko tai "Poista merkinnät"): korvataan koko dokumentti.
       writes.push({ path: PATHS.shopping, op: 'set', data: fallback })
@@ -106,6 +112,7 @@ export const diff = (prev: AppData, next: AppData): Write[] => {
       const data: Record<string, unknown> = {}
       if (Object.keys(changes).length > 0) data.checked = changes
       if (prev.extras !== next.extras) data.extras = plain(next.extras)
+      if (prev.tidy !== next.tidy) data.tidy = next.tidy ? plain(next.tidy) : null
       if (Object.keys(data).length > 0) writes.push({ path: PATHS.shopping, op: 'merge', data, fallback })
     }
   }

@@ -46,7 +46,7 @@ describe('yhteinen tallennus', () => {
         path: PATHS.shopping,
         op: 'merge',
         data: { checked: { sipuli: true } },
-        fallback: { checked: { maito: true, sipuli: true }, extras: [] },
+        fallback: { checked: { maito: true, sipuli: true }, extras: [], tidy: null },
       },
     ])
     const cleared = diff(next, { ...next, checked: [] })

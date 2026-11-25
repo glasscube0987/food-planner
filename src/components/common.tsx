@@ -6,17 +6,36 @@ import { CATEGORIES, CATEGORY_LABEL } from '../lib/types'
 import type { Category, Recipe } from '../lib/types'
 
 export const CategoryBadge = ({ category }: { category: Category }) => (
-  <span className={`badge badge-${category}`}>{CATEGORY_LABEL[category]}</span>
+  <span>
+    <i className={`cat-dot cat-${category}`} aria-hidden="true" />
+    {CATEGORY_LABEL[category]}
+  </span>
 )
 
 export const RecipeMeta = ({ recipe }: { recipe: Recipe }) => (
   <span className="meta">
     <CategoryBadge category={recipe.category} />
-    {recipe.minutes !== undefined && <span>⏱ {recipe.minutes} min</span>}
-    {recipe.lastsTwoDays && <span title="Riittää kahdeksi päiväksi">🥡 2 pv</span>}
-    {recipe.isOwn && <span>⭐ oma</span>}
+    {recipe.minutes !== undefined && <span>{recipe.minutes} min</span>}
+    {recipe.lastsTwoDays && <span>riittää 2 pv</span>}
+    {recipe.isOwn && <span className="tag">oma</span>}
   </span>
 )
+
+/** Viikon päivämäärät otsikkoon, esim. "23.–29.11.2026". */
+export const formatWeek = (weekStart: string) => {
+  const [y, m, d] = weekStart.split('-').map(Number)
+  const start = new Date(y!, m! - 1, d!)
+  const end = new Date(y!, m! - 1, d! + 6)
+  const startText = start.getMonth() === end.getMonth() ? `${start.getDate()}.` : `${start.getDate()}.${start.getMonth() + 1}.`
+  return `${startText}–${end.getDate()}.${end.getMonth() + 1}.${end.getFullYear()}`
+}
+
+/** Viikonpäivän päivämäärä, esim. "24.11.". */
+export const dayDate = (weekStart: string, index: number) => {
+  const [y, m, d] = weekStart.split('-').map(Number)
+  const date = new Date(y!, m! - 1, d! + index)
+  return `${date.getDate()}.${date.getMonth() + 1}.`
+}
 
 export const RecipeDetails = ({ recipe }: { recipe: Recipe }) => (
   <div className="details">
@@ -24,7 +43,7 @@ export const RecipeDetails = ({ recipe }: { recipe: Recipe }) => (
       {recipe.servings} annosta
       {recipe.tags.length > 0 && <> · {recipe.tags.join(', ')}</>}
     </p>
-    <h4>Ainekset</h4>
+    <h3>Ainekset</h3>
     <ul>
       {recipe.ingredients.map((i, n) => (
         <li key={n}>{formatIngredient(i)}</li>
@@ -32,7 +51,7 @@ export const RecipeDetails = ({ recipe }: { recipe: Recipe }) => (
     </ul>
     {recipe.instructions && (
       <>
-        <h4>Ohje</h4>
+        <h3>Ohje</h3>
         <p className="instructions">{recipe.instructions}</p>
       </>
     )}
@@ -54,8 +73,8 @@ export const Modal = ({ title, onClose, children }: { title: string; onClose: ()
     <div className="modal" role="dialog" aria-modal="true" aria-label={title} onClick={e => e.stopPropagation()}>
       <div className="modal-head">
         <h3>{title}</h3>
-        <button className="ghost" onClick={onClose} aria-label="Sulje">
-          ✕
+        <button className="ghost" onClick={onClose}>
+          Sulje
         </button>
       </div>
       <div className="modal-body">{children}</div>

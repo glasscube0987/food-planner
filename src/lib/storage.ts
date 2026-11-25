@@ -43,6 +43,7 @@ export const initialData = (now = new Date()): AppData => ({
   household: 4,
   checked: [],
   extras: [],
+  tidy: null,
 })
 
 /** Tarkistaa, että tuotu tai tallennettu data on oikean muotoista, ja täydentää puuttuvat kentät. */
@@ -59,6 +60,7 @@ export const normalize = (raw: unknown): AppData => {
     history: data.history ?? [],
     checked: data.checked ?? [],
     extras: data.extras ?? [],
+    tidy: data.tidy ?? null,
   }
 }
 
