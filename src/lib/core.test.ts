@@ -5,7 +5,7 @@ import { categorize, mealToRecipe } from './mealdb'
 import { parseIngredientLine } from './parse'
 import { randomizeWeek } from './randomize'
 import { buildShoppingList } from './shopping'
-import { DEFAULT_RULES as DEFAULTS, addWeeks, emptyPlan, mondayOf, normalize } from './storage'
+import { DEFAULT_RULES as DEFAULTS, addWeeks, emptyPlan, mondayOf, nextPlanWeek, normalize } from './storage'
 import { resolveSlots } from './types'
 import type { Recipe, Rules, WeekPlan } from './types'
 
@@ -269,6 +269,8 @@ describe('storage', () => {
     expect(mondayOf(new Date(2026, 9, 7))).toBe('2026-10-05')
     expect(mondayOf(new Date(2026, 9, 11))).toBe('2026-10-05')
     expect(addWeeks('2026-10-05', 1)).toBe('2026-10-12')
+    expect(nextPlanWeek('2026-10-12', new Date(2026, 10, 25))).toBe('2026-11-23')
+    expect(nextPlanWeek('2026-11-23', new Date(2026, 10, 25))).toBe('2026-11-30')
   })
 
   it('hylkää rikkinäisen datan ja täydentää puuttuvat kentät', () => {

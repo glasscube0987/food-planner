@@ -1,7 +1,7 @@
 import { useState } from 'react'
 
 import { randomizeWeek } from '../lib/randomize'
-import { addWeeks, emptyPlan } from '../lib/storage'
+import { emptyPlan, mondayOf, nextPlanWeek } from '../lib/storage'
 import { CATEGORIES, DAYS, DAY_GENITIVE, DAY_LABEL, resolveSlots } from '../lib/types'
 import type { AppData, Day, PlanSlot } from '../lib/types'
 import { newId } from '../state'
@@ -78,7 +78,7 @@ export const WeekView = ({
     update(d => ({
       ...d,
       history: planned > 0 ? [d.plan, ...d.history].slice(0, 12) : d.history,
-      plan: emptyPlan(addWeeks(d.plan.weekStart, 1)),
+      plan: emptyPlan(nextPlanWeek(d.plan.weekStart)),
       checked: [],
       extras: [],
       tidy: null,
@@ -163,7 +163,7 @@ export const WeekView = ({
 
       <div className="actions">
         <ConfirmButton
-          label="Aloita seuraava viikko"
+          label={data.plan.weekStart < mondayOf(new Date()) ? 'Siirry kuluvaan viikkoon' : 'Aloita seuraava viikko'}
           confirmLabel="Vahvista: tämä viikko siirtyy historiaan"
           skip={planned === 0}
           onConfirm={startNextWeek}

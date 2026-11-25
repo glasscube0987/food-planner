@@ -18,6 +18,16 @@ export const addWeeks = (weekStart: string, weeks: number): string => {
   return mondayOf(new Date(y!, m! - 1, d! + weeks * 7))
 }
 
+/**
+ * Seuraavan suunnitelman viikko: suunnitelmaa seuraava viikko, mutta vähintään
+ * kuluva viikko, jotta vanhalta viikolta palataan suoraan nykyhetkeen.
+ */
+export const nextPlanWeek = (weekStart: string, now = new Date()): string => {
+  const next = addWeeks(weekStart, 1)
+  const current = mondayOf(now)
+  return next < current ? current : next
+}
+
 export const emptyPlan = (weekStart: string): WeekPlan => ({
   weekStart,
   slots: DAYS.map(day => ({ day, recipeId: null, isLocked: false })),
